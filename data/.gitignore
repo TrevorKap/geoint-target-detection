@@ -1,0 +1,13 @@
+# Never commit downloaded datasets — they are large and re-fetchable via
+# scripts/download_data.sh. Track only the folder structure and docs.
+*
+!.gitignore
+!README.md
+!raw/
+raw/**
+!raw/rareplanes/
+!raw/dota/
+!raw/xview/
+raw/rareplanes/**
+raw/dota/**
+raw/xview/**
