@@ -1,0 +1,25 @@
+# DOTAv1 (tiled) — YOLO-OBB dataset config for the Tactical GEOINT Analyzer.
+# Generated tiles come from ml/src/prepare_dota.py (1024px windows, ~20% overlap).
+# `path` is absolute so training works regardless of the launch directory.
+
+path: C:/Users/Owner/ClaudeProjects/SatelliteObjectDetection/data/processed/dota_split
+train: images/train
+val: images/val
+
+# 15 DOTAv1 classes (Ultralytics order)
+names:
+  0: plane
+  1: ship
+  2: storage-tank
+  3: baseball-diamond
+  4: tennis-court
+  5: basketball-court
+  6: ground-track-field
+  7: harbor
+  8: bridge
+  9: large-vehicle
+  10: small-vehicle
+  11: helicopter
+  12: roundabout
+  13: soccer-ball-field
+  14: swimming-pool

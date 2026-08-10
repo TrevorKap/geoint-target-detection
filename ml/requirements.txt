@@ -1,0 +1,28 @@
+# ML / DL dependencies for the Tactical GEOINT Analyzer.
+#
+# NOTE: PyTorch is installed SEPARATELY with a CUDA index (see ml/setup_env.ps1),
+# because the default PyPI wheels are CPU-only. Do not add torch/torchvision here.
+
+# ── Core scientific stack ────────────────────────────────────────────────
+numpy
+pandas
+matplotlib
+tqdm
+pillow
+opencv-python
+
+# ── Geospatial (GeoTIFF I/O, vectors, CRS/affine) ────────────────────────
+rasterio          # GeoTIFF read/write, windowed reads, affine transforms
+geopandas         # GeoJSON / shapefile vector handling
+shapely           # geometry ops (polygons, NMS helpers)
+pyproj            # CRS transforms (pixel <-> EPSG:4326)
+
+# ── Detection / segmentation ─────────────────────────────────────────────
+ultralytics       # YOLOv8/YOLO11 Seg + OBB (oriented boxes)
+pycocotools       # COCO annotation parsing (RarePlanes tiled COCO)
+
+# ── Inference backend (used in a later phase) ────────────────────────────
+fastapi
+uvicorn[standard]
+onnxruntime-gpu   # ONNX Runtime with CUDA execution provider
+python-multipart  # multipart upload handling for /api/infer

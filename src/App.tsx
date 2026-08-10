@@ -5,7 +5,7 @@ import MapCanvas from './components/MapCanvas';
 import AnalyticalSummary from './components/AnalyticalSummary';
 import type { AnalysisResult, DetectorSettings, RasterMetadata } from './types';
 import { TARGET_ORDER } from './config';
-import { extractMetadata, runInference } from './services/inference';
+import { extractMetadata, runInference, InferenceError } from './services/inference';
 
 const DEFAULT_SETTINGS: DetectorSettings = {
   confidence: 0.75,
@@ -20,6 +20,7 @@ export default function App() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const status: 'idle' | 'loaded' | 'analyzing' = analyzing
     ? 'analyzing'
@@ -34,14 +35,25 @@ export default function App() {
     setPendingFile(file);
     setRaster(extractMetadata(file));
     setResult(null);
+    setError(null);
   };
 
   const handleRunAnalysis = async () => {
     if (!pendingFile || !raster) return;
     setAnalyzing(true);
+    setError(null);
     try {
       const res = await runInference(pendingFile, raster, settings);
       setResult(res);
+      // Adopt the backend's authoritative metadata (CRS, GSD, bounds) so the
+      // map can fit to the raster footprint.
+      setRaster(res.raster);
+    } catch (err) {
+      const msg =
+        err instanceof InferenceError
+          ? err.message
+          : 'Unexpected error running inference.';
+      setError(msg);
     } finally {
       setAnalyzing(false);
     }
@@ -51,6 +63,7 @@ export default function App() {
     setPendingFile(null);
     setRaster(null);
     setResult(null);
+    setError(null);
     setSettings(DEFAULT_SETTINGS);
   };
 
@@ -68,6 +81,20 @@ export default function App() {
           analyzing={analyzing}
         />
         <main className="app__main">
+          {error && (
+            <div className="app__error" role="alert">
+              <span className="app__error-tag">INFERENCE ERROR</span>
+              <span>{error}</span>
+              <button
+                type="button"
+                className="app__error-close"
+                onClick={() => setError(null)}
+                aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <MapCanvas
             detections={result?.detections ?? []}
             settings={settings}

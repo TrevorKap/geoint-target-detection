@@ -15,6 +15,21 @@ dist-ssr
 # Environment (Mapbox token etc.)
 .env
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# Training outputs / model weights / runtime logs
+runs/
+ml/runs/
+ml/outputs/
+*.pt
+*.onnx
+
+# Processed/derived datasets (re-generatable via ml/src/prepare_dota.py)
+data/processed/
+
 # Datasets — large, re-fetchable via scripts/download_data.sh (see data/.gitignore)
 data/raw/**/*.tar.gz
 data/raw/**/*.zip

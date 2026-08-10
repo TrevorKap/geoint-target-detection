@@ -359,6 +359,39 @@ input[type='range']::-moz-range-thumb {
   border-color: var(--text-dim);
 }
 
+/* ── Error banner ──────────────────────────────────────────────────────── */
+.app__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(251, 113, 133, 0.12);
+  border-bottom: 1px solid var(--danger);
+  color: #ffd7de;
+  font-size: 13px;
+}
+.app__error-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  background: var(--danger);
+  color: #180608;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.app__error-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+}
+.app__error-close:hover {
+  color: var(--text);
+}
+
 /* ── Map canvas ────────────────────────────────────────────────────────── */
 .map-canvas {
   position: relative;
