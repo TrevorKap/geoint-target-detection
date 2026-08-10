@@ -99,6 +99,7 @@ export default function App() {
             detections={result?.detections ?? []}
             settings={settings}
             raster={raster}
+            analyzing={analyzing}
           />
           <AnalyticalSummary result={result} settings={settings} />
         </main>

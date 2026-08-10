@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Feature, FeatureCollection } from 'geojson';
@@ -9,6 +9,7 @@ import {
   HAS_MAPBOX_TOKEN,
   MAPBOX_TOKEN,
   TARGET_META,
+  TARGET_ORDER,
 } from '../config';
 
 // Mapbox GL requires *some* token to initialise. When the operator has not
@@ -38,37 +39,59 @@ interface MapCanvasProps {
   detections: Detection[];
   settings: DetectorSettings;
   raster: RasterMetadata | null;
+  analyzing: boolean;
+}
+
+/** Detections passing the current confidence + class filters. */
+function visibleDetections(detections: Detection[], settings: DetectorSettings) {
+  return detections.filter(
+    (d) =>
+      d.confidence >= settings.confidence &&
+      settings.enabledClasses.has(d.targetClass),
+  );
 }
 
 /** Convert visible detections into a GeoJSON FeatureCollection for Mapbox. */
-function toFeatureCollection(
-  detections: Detection[],
-  settings: DetectorSettings,
-): FeatureCollection {
-  const features: Feature[] = detections
-    .filter(
-      (d) =>
-        d.confidence >= settings.confidence &&
-        settings.enabledClasses.has(d.targetClass),
-    )
-    .map((d) => ({
-      type: 'Feature',
-      id: d.id,
-      properties: {
-        targetClass: d.targetClass,
-        confidence: d.confidence,
-        color: TARGET_META[d.targetClass].color,
-      },
-      geometry: { type: 'Polygon', coordinates: [d.polygon] },
-    }));
+function toFeatureCollection(visible: Detection[]): FeatureCollection {
+  const features: Feature[] = visible.map((d) => ({
+    type: 'Feature',
+    id: d.id,
+    properties: {
+      label: TARGET_META[d.targetClass].label,
+      glyph: TARGET_META[d.targetClass].glyph,
+      confidence: d.confidence,
+      color: TARGET_META[d.targetClass].color,
+      area: d.areaSqMeters ?? null,
+      dota: (d.attributes?.dota_class as string) ?? null,
+    },
+    geometry: { type: 'Polygon', coordinates: [d.polygon] },
+  }));
   return { type: 'FeatureCollection', features };
 }
 
-export default function MapCanvas({ detections, settings, raster }: MapCanvasProps) {
+export default function MapCanvas({
+  detections,
+  settings,
+  raster,
+  analyzing,
+}: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const hoveredRef = useRef<string | number | null>(null);
   const [ready, setReady] = useState(false);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
+
+  const visible = useMemo(
+    () => visibleDetections(detections, settings),
+    [detections, settings],
+  );
+
+  // Classes present in the current view, in stable order — drives the legend.
+  const legendClasses = useMemo(() => {
+    const present = new Set(visible.map((d) => d.targetClass));
+    return TARGET_ORDER.filter((c) => present.has(c));
+  }, [visible]);
 
   // Initialise the map once.
   useEffect(() => {
@@ -82,8 +105,14 @@ export default function MapCanvas({ detections, settings, raster }: MapCanvasPro
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       attributionControl: true,
+      // Keep the WebGL buffer so the map can be screenshotted / exported as an
+      // image (used for portfolio captures); negligible perf cost at this scale.
+      preserveDrawingBuffer: true,
     });
     mapRef.current = map;
+    if (import.meta.env.DEV) {
+      (window as unknown as { __geoMap?: mapboxgl.Map }).__geoMap = map;
+    }
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
@@ -100,18 +129,95 @@ export default function MapCanvas({ detections, settings, raster }: MapCanvasPro
         id: FILL_LAYER,
         type: 'fill',
         source: DETECTIONS_SOURCE,
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 },
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            0.45,
+            0.22,
+          ],
+        },
       });
       map.addLayer({
         id: LINE_LAYER,
         type: 'line',
         source: DETECTIONS_SOURCE,
-        paint: { 'line-color': ['get', 'color'], 'line-width': 2 },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            3.5,
+            1.8,
+          ],
+        },
       });
       setReady(true);
     });
 
+    // Interactivity: pointer cursor + hover highlight over detections.
+    const setHover = (id: string | number | null) => {
+      if (hoveredRef.current !== null) {
+        map.setFeatureState(
+          { source: DETECTIONS_SOURCE, id: hoveredRef.current },
+          { hover: false },
+        );
+      }
+      hoveredRef.current = id;
+      if (id !== null) {
+        map.setFeatureState({ source: DETECTIONS_SOURCE, id }, { hover: true });
+      }
+    };
+
+    map.on('mousemove', FILL_LAYER, (e) => {
+      map.getCanvas().style.cursor = 'pointer';
+      const f = e.features?.[0];
+      if (f && f.id != null) setHover(f.id);
+    });
+    map.on('mouseleave', FILL_LAYER, () => {
+      map.getCanvas().style.cursor = '';
+      setHover(null);
+    });
+
+    // Click a detection -> detail popup.
+    map.on('click', FILL_LAYER, (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const p = f.properties as {
+        label: string;
+        glyph: string;
+        confidence: number;
+        color: string;
+        area: number | null;
+        dota: string | null;
+      };
+      const conf = `${(p.confidence * 100).toFixed(1)}%`;
+      const area = p.area != null ? `${Math.round(p.area).toLocaleString()} m²` : '—';
+      const html = `
+        <div class="det-popup">
+          <div class="det-popup__head" style="color:${p.color}">
+            <span>${p.glyph}</span><span>${p.label}</span>
+          </div>
+          <dl class="det-popup__grid">
+            <dt>Confidence</dt><dd>${conf}</dd>
+            <dt>Footprint</dt><dd>${area}</dd>
+            ${p.dota ? `<dt>Source class</dt><dd>${p.dota}</dd>` : ''}
+          </dl>
+        </div>`;
+      popupRef.current?.remove();
+      popupRef.current = new mapboxgl.Popup({
+        closeButton: true,
+        className: 'geoint-popup',
+        maxWidth: '260px',
+      })
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(map);
+    });
+
     return () => {
+      popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
     };
@@ -122,8 +228,8 @@ export default function MapCanvas({ detections, settings, raster }: MapCanvasPro
     const map = mapRef.current;
     if (!map || !ready) return;
     const src = map.getSource(DETECTIONS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
-    src?.setData(toFeatureCollection(detections, settings));
-  }, [detections, settings, ready]);
+    src?.setData(toFeatureCollection(visible));
+  }, [visible, ready]);
 
   // Fit the map to a newly-uploaded raster's footprint.
   useEffect(() => {
@@ -140,6 +246,33 @@ export default function MapCanvas({ detections, settings, raster }: MapCanvasPro
       {!HAS_MAPBOX_TOKEN && (
         <div className="map-canvas__badge" title="Using Esri World Imagery fallback">
           NO MAPBOX TOKEN · ESRI FALLBACK
+        </div>
+      )}
+
+      {analyzing && (
+        <div className="map-canvas__scanning" role="status" aria-live="polite">
+          <div className="scanline" />
+          <span className="map-canvas__scanning-label">RUNNING INFERENCE…</span>
+        </div>
+      )}
+
+      {legendClasses.length > 0 && (
+        <div className="map-legend" aria-label="Target legend">
+          <span className="map-legend__title">TARGETS</span>
+          {legendClasses.map((c) => {
+            const meta = TARGET_META[c];
+            const n = visible.filter((d) => d.targetClass === c).length;
+            return (
+              <div key={c} className="map-legend__row">
+                <span
+                  className="map-legend__swatch"
+                  style={{ background: meta.color }}
+                />
+                <span className="map-legend__label">{meta.label}</span>
+                <span className="map-legend__count">{n}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
