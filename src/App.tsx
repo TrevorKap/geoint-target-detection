@@ -21,6 +21,13 @@ export default function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A monotonically-bumped request so re-selecting the same target re-focuses it.
+  const [focusRequest, setFocusRequest] = useState<{ id: string; seq: number } | null>(
+    null,
+  );
+
+  const handleFocusDetection = (id: string) =>
+    setFocusRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
 
   const status: 'idle' | 'loaded' | 'analyzing' = analyzing
     ? 'analyzing'
@@ -64,6 +71,7 @@ export default function App() {
     setRaster(null);
     setResult(null);
     setError(null);
+    setFocusRequest(null);
     setSettings(DEFAULT_SETTINGS);
   };
 
@@ -100,8 +108,13 @@ export default function App() {
             settings={settings}
             raster={raster}
             analyzing={analyzing}
+            focusRequest={focusRequest}
           />
-          <AnalyticalSummary result={result} settings={settings} />
+          <AnalyticalSummary
+            result={result}
+            settings={settings}
+            onFocus={handleFocusDetection}
+          />
         </main>
       </div>
     </div>

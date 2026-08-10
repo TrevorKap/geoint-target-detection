@@ -570,7 +570,7 @@ input[type='range']::-moz-range-thumb {
   background: var(--panel);
   border-top: 1px solid var(--border-bright);
   padding: 14px 20px;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 .summary__title {
   margin: 0 0 12px;
@@ -581,6 +581,108 @@ input[type='range']::-moz-range-thumb {
 }
 .summary__empty {
   color: var(--text-dim);
+}
+.summary__body {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  height: calc(100% - 30px);
+  overflow: hidden;
+}
+.summary__left {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.summary__left .summary__stats {
+  gap: 18px;
+  margin-bottom: 0;
+}
+.summary__left .stat__value {
+  font-size: 24px;
+}
+.summary__left .summary__breakdown {
+  margin-bottom: 0;
+}
+.summary__left .summary__export {
+  margin-top: auto;
+}
+
+/* Target list (click to locate) */
+.target-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  padding-left: 20px;
+}
+.target-list__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.target-list__hint {
+  letter-spacing: 1px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+.target-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.target-list__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.target-list__row:hover {
+  background: var(--panel-2);
+  border-color: var(--border-bright);
+}
+.target-list__idx {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.target-list__glyph {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+}
+.target-list__label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.target-list__conf {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-weight: 700;
 }
 .summary__empty-hint {
   font-size: 12px;

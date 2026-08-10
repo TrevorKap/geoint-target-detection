@@ -42,6 +42,7 @@ interface MapCanvasProps {
   settings: DetectorSettings;
   raster: RasterMetadata | null;
   analyzing: boolean;
+  focusRequest: { id: string; seq: number } | null;
 }
 
 /** Detections passing the current confidence + class filters. */
@@ -71,12 +72,40 @@ function toFeatureCollection(visible: Detection[]): FeatureCollection {
   return { type: 'FeatureCollection', features };
 }
 
+/** Shared detail-popup markup for both map clicks and list focus. */
+function detailPopupHTML(o: {
+  label: string;
+  glyph: string;
+  confidence: number;
+  color: string;
+  area: number | null;
+  dota: string | null;
+}): string {
+  const conf = `${(o.confidence * 100).toFixed(1)}%`;
+  const area = o.area != null ? `${Math.round(o.area).toLocaleString()} m²` : '—';
+  return `
+    <div class="det-popup">
+      <div class="det-popup__head" style="color:${o.color}">
+        <span>${o.glyph}</span><span>${o.label}</span>
+      </div>
+      <dl class="det-popup__grid">
+        <dt>Confidence</dt><dd>${conf}</dd>
+        <dt>Footprint</dt><dd>${area}</dd>
+        ${o.dota ? `<dt>Source class</dt><dd>${o.dota}</dd>` : ''}
+      </dl>
+    </div>`;
+}
+
 export default function MapCanvas({
   detections,
   settings,
   raster,
   analyzing,
+  focusRequest,
 }: MapCanvasProps) {
+  // Latest detections, read by the focus effect without re-subscribing to them.
+  const detectionsRef = useRef(detections);
+  detectionsRef.current = detections;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
@@ -194,19 +223,7 @@ export default function MapCanvas({
         area: number | null;
         dota: string | null;
       };
-      const conf = `${(p.confidence * 100).toFixed(1)}%`;
-      const area = p.area != null ? `${Math.round(p.area).toLocaleString()} m²` : '—';
-      const html = `
-        <div class="det-popup">
-          <div class="det-popup__head" style="color:${p.color}">
-            <span>${p.glyph}</span><span>${p.label}</span>
-          </div>
-          <dl class="det-popup__grid">
-            <dt>Confidence</dt><dd>${conf}</dd>
-            <dt>Footprint</dt><dd>${area}</dd>
-            ${p.dota ? `<dt>Source class</dt><dd>${p.dota}</dd>` : ''}
-          </dl>
-        </div>`;
+      const html = detailPopupHTML(p);
       popupRef.current?.remove();
       popupRef.current = new mapboxgl.Popup({
         closeButton: true,
@@ -266,6 +283,51 @@ export default function MapCanvas({
       map.getLayer(FILL_LAYER) ? FILL_LAYER : undefined,
     );
   }, [raster, ready]);
+
+  // Focus a detection selected from the list: fly to it, highlight, and popup.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !focusRequest) return;
+    const det = detectionsRef.current.find((d) => d.id === focusRequest.id);
+    if (!det) return;
+
+    const lons = det.polygon.map((p) => p[0]);
+    const lats = det.polygon.map((p) => p[1]);
+    const sw: [number, number] = [Math.min(...lons), Math.min(...lats)];
+    const ne: [number, number] = [Math.max(...lons), Math.max(...lats)];
+    // Keep padding well under the container's smallest dimension so fitBounds
+    // never silently no-ops on a short viewport.
+    map.fitBounds([sw, ne], { padding: 60, maxZoom: 19, duration: 700 });
+
+    // move the hover highlight to the focused feature
+    if (hoveredRef.current !== null) {
+      map.setFeatureState(
+        { source: DETECTIONS_SOURCE, id: hoveredRef.current },
+        { hover: false },
+      );
+    }
+    map.setFeatureState({ source: DETECTIONS_SOURCE, id: det.id }, { hover: true });
+    hoveredRef.current = det.id;
+
+    const meta = TARGET_META[det.targetClass];
+    const html = detailPopupHTML({
+      label: meta.label,
+      glyph: meta.glyph,
+      confidence: det.confidence,
+      color: meta.color,
+      area: det.areaSqMeters ?? null,
+      dota: (det.attributes?.dota_class as string) ?? null,
+    });
+    popupRef.current?.remove();
+    popupRef.current = new mapboxgl.Popup({
+      closeButton: true,
+      className: 'geoint-popup',
+      maxWidth: '260px',
+    })
+      .setLngLat([(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2])
+      .setHTML(html)
+      .addTo(map);
+  }, [focusRequest, ready]);
 
   return (
     <div className="map-canvas">
