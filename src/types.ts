@@ -44,6 +44,20 @@ export interface RasterMetadata {
   acquired?: string;
   /** Geographic bounds [west, south, east, north] for map fit. */
   bounds?: [number, number, number, number];
+  /**
+   * A downsampled, georeferenced preview of the raster for display on the map.
+   * `image` is a PNG data URI; `coordinates` are the four corners as [lon, lat]
+   * in Mapbox image-source order: top-left, top-right, bottom-right, bottom-left.
+   */
+  overlay?: {
+    image: string;
+    coordinates: [
+      [number, number],
+      [number, number],
+      [number, number],
+      [number, number],
+    ];
+  };
 }
 
 /** The full result of an inference run over one raster. */

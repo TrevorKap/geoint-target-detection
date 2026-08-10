@@ -34,6 +34,8 @@ const ESRI_FALLBACK_STYLE: mapboxgl.StyleSpecification = {
 const DETECTIONS_SOURCE = 'detections';
 const FILL_LAYER = 'detections-fill';
 const LINE_LAYER = 'detections-line';
+const OVERLAY_SOURCE = 'raster-overlay';
+const OVERLAY_LAYER = 'raster-overlay-layer';
 
 interface MapCanvasProps {
   detections: Detection[];
@@ -237,6 +239,32 @@ export default function MapCanvas({
     if (!map || !ready || !raster?.bounds) return;
     const [w, s, e, n] = raster.bounds;
     map.fitBounds([[w, s], [e, n]], { padding: 48, duration: 800 });
+  }, [raster, ready]);
+
+  // Render the uploaded raster as a georeferenced image overlay, under the
+  // detection layers so boxes stay on top. Rebuilt whenever the raster changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    if (map.getLayer(OVERLAY_LAYER)) map.removeLayer(OVERLAY_LAYER);
+    if (map.getSource(OVERLAY_SOURCE)) map.removeSource(OVERLAY_SOURCE);
+
+    const overlay = raster?.overlay;
+    if (!overlay) return;
+    map.addSource(OVERLAY_SOURCE, {
+      type: 'image',
+      url: overlay.image,
+      coordinates: overlay.coordinates,
+    });
+    map.addLayer(
+      {
+        id: OVERLAY_LAYER,
+        type: 'raster',
+        source: OVERLAY_SOURCE,
+        paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 },
+      },
+      map.getLayer(FILL_LAYER) ? FILL_LAYER : undefined,
+    );
   }, [raster, ready]);
 
   return (
