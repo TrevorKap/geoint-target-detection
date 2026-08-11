@@ -1,17 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import MapCanvas from './components/MapCanvas';
 import AnalyticalSummary from './components/AnalyticalSummary';
 import type { AnalysisResult, DetectorSettings, RasterMetadata } from './types';
 import { TARGET_ORDER } from './config';
-import { extractMetadata, runInference, InferenceError } from './services/inference';
+import {
+  extractMetadata,
+  runInference,
+  regenerateOverlay,
+  InferenceError,
+} from './services/inference';
 
 const DEFAULT_SETTINGS: DetectorSettings = {
   confidence: 0.75,
   iouNms: 0.45,
   enabledClasses: new Set(TARGET_ORDER),
   visualization: 'rgb',
+  overlayOpacity: 1,
 };
 
 export default function App() {
@@ -28,6 +34,32 @@ export default function App() {
 
   const handleFocusDetection = (id: string) =>
     setFocusRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
+
+  // Note shown when False-Color IR is requested but the raster has no NIR band.
+  const [vizNote, setVizNote] = useState<string | null>(null);
+
+  // Re-render the map overlay when the RGB/IR toggle changes (no re-inference).
+  useEffect(() => {
+    if (!pendingFile || !result) return;
+    let cancelled = false;
+    regenerateOverlay(pendingFile, settings.visualization)
+      .then((overlay) => {
+        if (cancelled) return;
+        setRaster((prev) => (prev ? { ...prev, overlay: overlay ?? undefined } : prev));
+        setVizNote(
+          settings.visualization === 'ir' && overlay && overlay.irApplied === false
+            ? 'No near-infrared band in this raster — showing RGB.'
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setVizNote('Could not rebuild the overlay (backend offline?).');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.visualization]);
 
   const status: 'idle' | 'loaded' | 'analyzing' = analyzing
     ? 'analyzing'
@@ -55,6 +87,11 @@ export default function App() {
       // Adopt the backend's authoritative metadata (CRS, GSD, bounds) so the
       // map can fit to the raster footprint.
       setRaster(res.raster);
+      setVizNote(
+        settings.visualization === 'ir' && res.raster.overlay?.irApplied === false
+          ? 'No near-infrared band in this raster — showing RGB.'
+          : null,
+      );
     } catch (err) {
       const msg =
         err instanceof InferenceError
@@ -72,6 +109,7 @@ export default function App() {
     setResult(null);
     setError(null);
     setFocusRequest(null);
+    setVizNote(null);
     setSettings(DEFAULT_SETTINGS);
   };
 
@@ -87,6 +125,7 @@ export default function App() {
           onRunAnalysis={handleRunAnalysis}
           onClear={handleClear}
           analyzing={analyzing}
+          vizNote={vizNote}
         />
         <main className="app__main">
           {error && (

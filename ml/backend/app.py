@@ -78,6 +78,7 @@ async def infer(
     confidence: float = Form(0.25),
     iou_nms: float = Form(0.45),
     classes: str = Form(""),  # comma-separated TargetClass values; empty = all
+    visualization: str = Form("rgb"),  # "rgb" | "ir" for the display overlay
 ) -> dict:
     """Accept a GeoTIFF + detector settings, return an AnalysisResult."""
     model = _get_model()
@@ -95,6 +96,7 @@ async def infer(
             confidence=confidence,
             iou_nms=iou_nms,
             classes=class_set,
+            visualization=visualization,
         )
         # preserve the client-supplied filename in the response metadata
         result["raster"]["filename"] = raster.filename or result["raster"]["filename"]
@@ -103,6 +105,26 @@ async def infer(
         raise
     except Exception as exc:  # surface pipeline errors as 500s with context
         raise HTTPException(status_code=500, detail=f"Inference failed: {exc}") from exc
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
+
+
+@app.post("/api/overlay")
+async def overlay(
+    raster: UploadFile = File(...),
+    visualization: str = Form("rgb"),
+) -> dict:
+    """Regenerate just the display overlay for a raster (used by the RGB/IR toggle
+    so switching bands doesn't require re-running detection)."""
+    suffix = Path(raster.filename or "upload.tif").suffix or ".tif"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(await raster.read())
+        tmp.flush()
+        tmp.close()
+        return {"overlay": gi.overlay_from_path(tmp.name, visualization=visualization)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Overlay build failed: {exc}") from exc
     finally:
         Path(tmp.name).unlink(missing_ok=True)
 

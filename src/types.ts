@@ -57,6 +57,10 @@ export interface RasterMetadata {
       [number, number],
       [number, number],
     ];
+    /** Which composite this overlay was rendered with. */
+    visualization?: 'rgb' | 'ir';
+    /** True only if a real NIR band was used for the false-colour composite. */
+    irApplied?: boolean;
   };
 }
 
@@ -74,6 +78,8 @@ export interface DetectorSettings {
   iouNms: number; // [0, 1]
   enabledClasses: Set<TargetClass>;
   visualization: 'rgb' | 'ir';
+  /** Opacity of the uploaded-raster overlay on the map, [0, 1]. */
+  overlayOpacity: number;
 }
 
 /** Live cursor position readout for the map footer. */

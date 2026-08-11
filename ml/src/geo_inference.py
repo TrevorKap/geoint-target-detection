@@ -151,19 +151,34 @@ def _to_uint8_rgb(arr: np.ndarray) -> np.ndarray:
     return np.transpose(out, (1, 2, 0)).astype(np.uint8)
 
 
-def build_overlay(ds: rasterio.DatasetReader, max_size: int = 1600) -> dict | None:
-    """Downsampled RGB PNG of the raster + its EPSG:4326 corners, for map display.
+def build_overlay(
+    ds: rasterio.DatasetReader, max_size: int = 1600, visualization: str = "rgb"
+) -> dict | None:
+    """Downsampled PNG of the raster + its EPSG:4326 corners, for map display.
 
-    Returns {image: data-URI, coordinates: [TL, TR, BR, BL] as [lon, lat]} so the
-    front-end can drop it straight into a Mapbox image source. None if the raster
-    isn't georeferenced (can't be placed on a map).
+    `visualization`:
+      - "rgb": natural-colour, bands 1-3.
+      - "ir":  false-colour NIR composite (NIR, Red, Green = bands 4,1,2), which
+               makes vegetation pop red — but only if the raster actually has a
+               4th (near-infrared) band. Otherwise it falls back to RGB and
+               reports irApplied=False.
+
+    Returns {image: data-URI, coordinates: [TL,TR,BR,BL] lon/lat, visualization,
+    irApplied}. None if the raster isn't georeferenced (can't be placed on a map).
     """
     if ds.crs is None:
         return None
     scale = min(1.0, max_size / max(ds.width, ds.height))
     out_w = max(1, round(ds.width * scale))
     out_h = max(1, round(ds.height * scale))
-    band_idx = list(range(1, min(3, ds.count) + 1))
+
+    ir_applied = False
+    if visualization == "ir" and ds.count >= 4:
+        band_idx = [4, 1, 2]  # NIR, Red, Green false-colour composite
+        ir_applied = True
+    else:
+        band_idx = list(range(1, min(3, ds.count) + 1))
+
     arr = ds.read(indexes=band_idx, out_shape=(len(band_idx), out_h, out_w))
     png = Image.fromarray(_to_uint8_rgb(arr), "RGB")
     buf = io.BytesIO()
@@ -176,7 +191,18 @@ def build_overlay(ds: rasterio.DatasetReader, max_size: int = 1600) -> dict | No
     xs, ys = rasterio.transform.xy(ds.transform, rows, cols, offset="ul")
     lons, lats = warp_transform(ds.crs, "EPSG:4326", xs, ys)
     coordinates = [[float(lo), float(la)] for lo, la in zip(lons, lats)]
-    return {"image": f"data:image/png;base64,{data}", "coordinates": coordinates}
+    return {
+        "image": f"data:image/png;base64,{data}",
+        "coordinates": coordinates,
+        "visualization": visualization,
+        "irApplied": ir_applied,
+    }
+
+
+def overlay_from_path(path: str | Path, visualization: str = "rgb") -> dict | None:
+    """Open a raster and build just its display overlay (for the /api/overlay seam)."""
+    with rasterio.open(path) as ds:
+        return build_overlay(ds, visualization=visualization)
 
 
 # ── inference ────────────────────────────────────────────────────────────────
@@ -240,6 +266,7 @@ def run_pipeline(
     tile: int = 1024,
     overlap: float = 0.2,
     imgsz: int = 1024,
+    visualization: str = "rgb",
 ) -> dict:
     """Full GeoTIFF -> AnalysisResult dict. `classes` filters by TargetClass."""
     t0 = time.perf_counter()
@@ -247,7 +274,7 @@ def run_pipeline(
 
     raw: list[dict] = []
     with rasterio.open(path) as ds:
-        meta["overlay"] = build_overlay(ds)
+        meta["overlay"] = build_overlay(ds, visualization=visualization)
         band_idx = list(range(1, min(3, ds.count) + 1))
         for x, y, w, h in _iter_windows(ds.width, ds.height, tile, overlap):
             arr = ds.read(indexes=band_idx, window=Window(x, y, w, h))

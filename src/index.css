@@ -191,6 +191,12 @@ body {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+.panel-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--accent-cyan);
+}
 
 /* Dropzone */
 .dropzone {

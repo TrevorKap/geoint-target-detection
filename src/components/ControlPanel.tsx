@@ -10,6 +10,7 @@ interface ControlPanelProps {
   onRunAnalysis: () => void;
   onClear: () => void;
   analyzing: boolean;
+  vizNote: string | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -32,6 +33,7 @@ export default function ControlPanel({
   onRunAnalysis,
   onClear,
   analyzing,
+  vizNote,
 }: ControlPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -159,6 +161,29 @@ export default function ControlPanel({
             False-Color IR
           </button>
         </div>
+
+        {vizNote && <p className="panel-note">{vizNote}</p>}
+
+        {raster?.overlay && (
+          <div className="slider-row">
+            <div className="slider-row__head">
+              <span>Raster Overlay Opacity</span>
+              <span className="slider-row__value">
+                {settings.overlayOpacity.toFixed(2)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={settings.overlayOpacity}
+              onChange={(e) =>
+                onSettingsChange({ overlayOpacity: Number(e.target.value) })
+              }
+            />
+          </div>
+        )}
       </section>
 
       <section className="panel-section panel-section--actions">

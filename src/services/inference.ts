@@ -40,6 +40,7 @@ export async function runInference(
   form.append('confidence', String(settings.confidence));
   form.append('iou_nms', String(settings.iouNms));
   form.append('classes', Array.from(settings.enabledClasses).join(','));
+  form.append('visualization', settings.visualization);
 
   let resp: Response;
   try {
@@ -82,6 +83,29 @@ export function extractMetadata(file: File): RasterMetadata {
     gsdMeters: undefined,
     bounds: undefined,
   };
+}
+
+/**
+ * Rebuild just the display overlay for a different band composite (RGB vs
+ * false-colour IR), so the toggle doesn't require re-running detection.
+ * Returns the new overlay, or null if the raster isn't georeferenced.
+ */
+export async function regenerateOverlay(
+  file: File,
+  visualization: 'rgb' | 'ir',
+): Promise<RasterMetadata['overlay'] | null> {
+  const form = new FormData();
+  form.append('raster', file, file.name);
+  form.append('visualization', visualization);
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_BASE}/api/overlay`, { method: 'POST', body: form });
+  } catch {
+    throw new InferenceError(`Could not reach the backend at ${API_BASE}.`);
+  }
+  if (!resp.ok) throw new InferenceError(`Overlay build failed (HTTP ${resp.status}).`);
+  const body = (await resp.json()) as { overlay: RasterMetadata['overlay'] | null };
+  return body.overlay;
 }
 
 /**

@@ -278,11 +278,22 @@ export default function MapCanvas({
         id: OVERLAY_LAYER,
         type: 'raster',
         source: OVERLAY_SOURCE,
-        paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 },
+        paint: {
+          'raster-opacity': settings.overlayOpacity,
+          'raster-fade-duration': 0,
+        },
       },
       map.getLayer(FILL_LAYER) ? FILL_LAYER : undefined,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raster, ready]);
+
+  // Live-update overlay opacity without rebuilding the image source.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !map.getLayer(OVERLAY_LAYER)) return;
+    map.setPaintProperty(OVERLAY_LAYER, 'raster-opacity', settings.overlayOpacity);
+  }, [settings.overlayOpacity, ready]);
 
   // Focus a detection selected from the list: fly to it, highlight, and popup.
   useEffect(() => {
