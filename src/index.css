@@ -607,8 +607,20 @@ input[type='range']::-moz-range-thumb {
 .summary__left .summary__breakdown {
   margin-bottom: 0;
 }
-.summary__left .summary__export {
+.summary__exports {
   margin-top: auto;
+  display: flex;
+  gap: 8px;
+}
+.summary__exports .btn {
+  flex: 1;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.summary__export-err {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--danger);
 }
 
 /* Target list (click to locate) */

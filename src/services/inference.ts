@@ -1,4 +1,5 @@
 import type { AnalysisResult, DetectorSettings, RasterMetadata } from '../types';
+import { toGeoJSON } from '../utils/geojson';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -81,6 +82,45 @@ export function extractMetadata(file: File): RasterMetadata {
     gsdMeters: undefined,
     bounds: undefined,
   };
+}
+
+/**
+ * Export the (already-filtered) detections as a zipped ESRI Shapefile via the
+ * backend, and trigger a browser download. Requires the backend to be running.
+ */
+export async function exportShapefile(result: AnalysisResult): Promise<void> {
+  const fc = toGeoJSON(result);
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_BASE}/api/export/shapefile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fc),
+    });
+  } catch {
+    throw new InferenceError(
+      `Could not reach the backend at ${API_BASE} to build the Shapefile.`,
+    );
+  }
+  if (!resp.ok) {
+    let detail = `Shapefile export failed (HTTP ${resp.status}).`;
+    try {
+      const body = (await resp.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      /* keep generic message */
+    }
+    throw new InferenceError(detail, resp.status);
+  }
+
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const base = result.raster.filename.replace(/\.[^.]+$/, '') || 'detections';
+  a.href = url;
+  a.download = `${base}_shapefile.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Liveness probe for the backend; used to show connection status in the UI. */

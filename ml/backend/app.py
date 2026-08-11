@@ -19,8 +19,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 # make ml/src importable
 ROOT = Path(__file__).resolve().parents[2]
@@ -104,3 +105,47 @@ async def infer(
         raise HTTPException(status_code=500, detail=f"Inference failed: {exc}") from exc
     finally:
         Path(tmp.name).unlink(missing_ok=True)
+
+
+@app.post("/api/export/shapefile")
+def export_shapefile(featurecollection: dict = Body(...)) -> Response:
+    """Convert a detections GeoJSON FeatureCollection into a zipped ESRI Shapefile.
+
+    Returns application/zip containing detections.shp/.shx/.dbf/.prj (EPSG:4326).
+    Independent of the model, so it works whether or not weights are loaded.
+    """
+    import io
+    import shutil
+    import tempfile
+    import zipfile
+
+    import geopandas as gpd
+
+    features = featurecollection.get("features", [])
+    if not features:
+        raise HTTPException(status_code=400, detail="No detections to export.")
+
+    gdf = gpd.GeoDataFrame.from_features(features)
+    # Shapefile DBF field names are capped at 10 chars; keep a controlled set.
+    keep = [c for c in ("class", "confidence", "area_sqm", "dota_class") if c in gdf.columns]
+    gdf = gdf[keep + ["geometry"]]
+    gdf.set_crs("EPSG:4326", inplace=True, allow_override=True)
+
+    tmp = tempfile.mkdtemp()
+    try:
+        gdf.to_file(Path(tmp) / "detections.shp", driver="ESRI Shapefile")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in sorted(os.listdir(tmp)):
+                zf.write(os.path.join(tmp, f), f)
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="detections_shapefile.zip"'
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Shapefile export failed: {exc}") from exc
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)

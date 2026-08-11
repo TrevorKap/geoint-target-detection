@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { AnalysisResult, DetectorSettings } from '../types';
 import { TARGET_META, TARGET_ORDER } from '../config';
 import { downloadGeoJSON } from '../utils/geojson';
+import { exportShapefile, InferenceError } from '../services/inference';
 
 interface AnalyticalSummaryProps {
   result: AnalysisResult | null;
@@ -34,6 +35,24 @@ export default function AnalyticalSummary({
   })).filter((c) => c.n > 0);
 
   const totalArea = visible.reduce((sum, d) => sum + (d.areaSqMeters ?? 0), 0);
+
+  const [exporting, setExporting] = useState(false);
+  const [shpError, setShpError] = useState<string | null>(null);
+
+  const handleShapefile = async () => {
+    if (!result) return;
+    setExporting(true);
+    setShpError(null);
+    try {
+      await exportShapefile({ ...result, detections: visible });
+    } catch (e) {
+      setShpError(
+        e instanceof InferenceError ? e.message : 'Shapefile export failed.',
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <section className="summary">
@@ -85,14 +104,26 @@ export default function AnalyticalSummary({
               })}
             </div>
 
-            <button
-              type="button"
-              className="btn btn--primary summary__export"
-              disabled={visible.length === 0}
-              onClick={() => downloadGeoJSON({ ...result, detections: visible })}
-            >
-              ⬇ Download GeoJSON
-            </button>
+            <div className="summary__exports">
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={visible.length === 0}
+                onClick={() => downloadGeoJSON({ ...result, detections: visible })}
+              >
+                ⬇ GeoJSON
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={visible.length === 0 || exporting}
+                onClick={handleShapefile}
+                title="Zipped ESRI Shapefile (.shp/.shx/.dbf/.prj)"
+              >
+                {exporting ? 'Building…' : '⬇ Shapefile'}
+              </button>
+            </div>
+            {shpError && <p className="summary__export-err">{shpError}</p>}
           </div>
 
           <div className="target-list">
