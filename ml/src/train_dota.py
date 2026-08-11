@@ -32,6 +32,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", default="0")
     p.add_argument("--name", default="dota_obb")
     p.add_argument("--resume", default=None, help="path to last.pt to resume")
+    p.add_argument(
+        "--scratch",
+        action="store_true",
+        help="train from random init (no pretrained) to show the full learning "
+        "curve; builds from the architecture YAML and writes to dota_obb_scratch",
+    )
     return p.parse_args()
 
 
@@ -43,15 +49,19 @@ def main() -> None:
         model.train(resume=True)
         return
 
-    model = YOLO(args.model)
+    # From scratch: build from the architecture YAML (random weights) so the
+    # mAP curve rises from ~0 and the checkpoint montage shows real learning.
+    model = YOLO("yolo11s-obb.yaml") if args.scratch else YOLO(args.model)
+    name = args.name if args.name != "dota_obb" or not args.scratch else "dota_obb_scratch"
     model.train(
         data=str(DATA),
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
+        pretrained=not args.scratch,
         project=str(ROOT / "runs"),
-        name=args.name,
+        name=name,
         exist_ok=True,
         # ── overhead-view augmentation (orientation invariance) ──
         degrees=180.0,   # full-range rotation
