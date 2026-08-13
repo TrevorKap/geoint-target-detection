@@ -1,4 +1,9 @@
-import type { AnalysisResult, DetectorSettings, RasterMetadata } from '../types';
+import type {
+  AnalysisResult,
+  DetectorSettings,
+  ModelInfo,
+  RasterMetadata,
+} from '../types';
 import { toGeoJSON } from '../utils/geojson';
 
 /**
@@ -41,6 +46,7 @@ export async function runInference(
   form.append('iou_nms', String(settings.iouNms));
   form.append('classes', Array.from(settings.enabledClasses).join(','));
   form.append('visualization', settings.visualization);
+  form.append('model', settings.modelId);
 
   let resp: Response;
   try {
@@ -145,6 +151,17 @@ export async function exportShapefile(result: AnalysisResult): Promise<void> {
   a.download = `${base}_shapefile.zip`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Fetch the selectable detection models and the default id. */
+export async function fetchModels(): Promise<{ models: ModelInfo[]; default: string | null }> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/models`);
+    if (!resp.ok) return { models: [], default: null };
+    return (await resp.json()) as { models: ModelInfo[]; default: string | null };
+  } catch {
+    return { models: [], default: null };
+  }
 }
 
 /** Liveness probe for the backend; used to show connection status in the UI. */

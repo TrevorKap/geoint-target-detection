@@ -80,6 +80,16 @@ export interface DetectorSettings {
   visualization: 'rgb' | 'ir';
   /** Opacity of the uploaded-raster overlay on the map, [0, 1]. */
   overlayOpacity: number;
+  /** Selected detection model id (from GET /api/models). */
+  modelId: string;
+}
+
+/** A selectable detection model, tagged by sensor / algorithm / training data. */
+export interface ModelInfo {
+  id: string;
+  satellite: string;
+  algorithm: string;
+  training_data: string;
 }
 
 /** Live cursor position readout for the map footer. */

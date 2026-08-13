@@ -29,46 +29,82 @@ sys.path.insert(0, str(ROOT / "ml" / "src"))
 
 import geo_inference as gi  # noqa: E402
 
-WEIGHTS = Path(os.environ.get("GEOINT_WEIGHTS", ROOT / "runs/dota_obb/weights/best.pt"))
 DEVICE = os.environ.get("GEOINT_DEVICE", "cpu")
 
-app = FastAPI(title="Tactical GEOINT Analyzer — Inference API", version="0.1.0")
+# ── Model registry ───────────────────────────────────────────────────────────
+# Each selectable model, tagged by satellite / algorithm / training data so the
+# UI can label it. Only entries whose weights exist on disk are offered. Adding a
+# new model (e.g. a Sentinel-2 land-cover net) is just another dict here.
+MODELS: list[dict] = [
+    {
+        "id": "dota-obb-finetuned",
+        "satellite": "High-res aerial",
+        "algorithm": "YOLO11s-OBB",
+        "training_data": "DOTAv1 (fine-tuned)",
+        "weights": ROOT / "runs" / "dota_obb" / "weights" / "best.pt",
+    },
+    {
+        "id": "dota-obb-pretrained",
+        "satellite": "High-res aerial",
+        "algorithm": "YOLO11s-OBB",
+        "training_data": "DOTAv1 (stock pretrained)",
+        "weights": ROOT / "yolo11s-obb.pt",
+    },
+    {
+        "id": "dota-obb-scratch",
+        "satellite": "High-res aerial",
+        "algorithm": "YOLO11s-OBB",
+        "training_data": "DOTAv1 (from scratch, demo)",
+        "weights": ROOT / "runs" / "dota_obb_scratch" / "weights" / "best.pt",
+    },
+]
 
-# Vite dev server origins
+app = FastAPI(title="Tactical GEOINT Analyzer — Inference API", version="0.2.0")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-_model = None  # lazy singleton
+_cache: dict[str, object] = {}  # model id -> loaded YOLO
 
 
-def _get_model():
-    global _model
-    if _model is None:
-        if not WEIGHTS.exists():
-            raise HTTPException(
-                status_code=503,
-                detail=f"Model weights not found at {WEIGHTS}. Training may still "
-                       f"be running; set GEOINT_WEIGHTS to a valid .pt file.",
-            )
-        _model = gi.load_model(WEIGHTS, device=DEVICE)
-    return _model
+def available_models() -> list[dict]:
+    return [m for m in MODELS if Path(m["weights"]).exists()]
+
+
+def _get_model(model_id: str | None = None):
+    avail = available_models()
+    if not avail:
+        raise HTTPException(status_code=503, detail="No model weights found on disk.")
+    by_id = {m["id"]: m for m in avail}
+    chosen = by_id.get(model_id or "", avail[0])
+    if chosen["id"] not in _cache:
+        _cache[chosen["id"]] = gi.load_model(chosen["weights"], device=DEVICE)
+    return _cache[chosen["id"]]
+
+
+@app.get("/api/models")
+def list_models() -> dict:
+    avail = available_models()
+    return {
+        "models": [
+            {k: m[k] for k in ("id", "satellite", "algorithm", "training_data")}
+            for m in avail
+        ],
+        "default": avail[0]["id"] if avail else None,
+    }
 
 
 @app.get("/api/health")
 def health() -> dict:
     return {
         "status": "ok",
-        "weights": str(WEIGHTS),
-        "weights_present": WEIGHTS.exists(),
         "device": DEVICE,
-        "model_loaded": _model is not None,
+        "models_available": [m["id"] for m in available_models()],
+        "models_loaded": list(_cache.keys()),
     }
 
 
@@ -79,9 +115,10 @@ async def infer(
     iou_nms: float = Form(0.45),
     classes: str = Form(""),  # comma-separated TargetClass values; empty = all
     visualization: str = Form("rgb"),  # "rgb" | "ir" for the display overlay
+    model: str = Form(""),  # model id from /api/models; empty = default
 ) -> dict:
     """Accept a GeoTIFF + detector settings, return an AnalysisResult."""
-    model = _get_model()
+    detector = _get_model(model)
     class_set = {c.strip() for c in classes.split(",") if c.strip()} or None
 
     suffix = Path(raster.filename or "upload.tif").suffix or ".tif"
@@ -92,7 +129,7 @@ async def infer(
         tmp.close()
         result = gi.run_pipeline(
             tmp.name,
-            model,
+            detector,
             confidence=confidence,
             iou_nms=iou_nms,
             classes=class_set,

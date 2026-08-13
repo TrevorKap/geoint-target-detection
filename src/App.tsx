@@ -3,12 +3,18 @@ import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import MapCanvas from './components/MapCanvas';
 import AnalyticalSummary from './components/AnalyticalSummary';
-import type { AnalysisResult, DetectorSettings, RasterMetadata } from './types';
+import type {
+  AnalysisResult,
+  DetectorSettings,
+  ModelInfo,
+  RasterMetadata,
+} from './types';
 import { TARGET_ORDER } from './config';
 import {
   extractMetadata,
   runInference,
   regenerateOverlay,
+  fetchModels,
   InferenceError,
 } from './services/inference';
 
@@ -18,6 +24,7 @@ const DEFAULT_SETTINGS: DetectorSettings = {
   enabledClasses: new Set(TARGET_ORDER),
   visualization: 'rgb',
   overlayOpacity: 1,
+  modelId: '',
 };
 
 export default function App() {
@@ -37,6 +44,15 @@ export default function App() {
 
   // Note shown when False-Color IR is requested but the raster has no NIR band.
   const [vizNote, setVizNote] = useState<string | null>(null);
+
+  // Available detection models (from the backend), and the current selection.
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  useEffect(() => {
+    fetchModels().then(({ models: list, default: def }) => {
+      setModels(list);
+      if (def) setSettings((prev) => ({ ...prev, modelId: prev.modelId || def }));
+    });
+  }, []);
 
   // Re-render the map overlay when the RGB/IR toggle changes (no re-inference).
   useEffect(() => {
@@ -110,7 +126,7 @@ export default function App() {
     setError(null);
     setFocusRequest(null);
     setVizNote(null);
-    setSettings(DEFAULT_SETTINGS);
+    setSettings((prev) => ({ ...DEFAULT_SETTINGS, modelId: prev.modelId }));
   };
 
   return (
@@ -120,6 +136,7 @@ export default function App() {
         <ControlPanel
           settings={settings}
           onSettingsChange={handleSettingsChange}
+          models={models}
           raster={raster}
           onFileSelected={handleFileSelected}
           onRunAnalysis={handleRunAnalysis}

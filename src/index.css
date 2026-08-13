@@ -233,6 +233,23 @@ body {
   color: var(--text-dim);
 }
 
+/* Model select */
+.model-select {
+  width: 100%;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  color: var(--accent-cyan);
+  border: 1px solid var(--border-bright);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.model-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Target chips */
 .target-grid {
   display: grid;

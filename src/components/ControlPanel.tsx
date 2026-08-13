@@ -1,10 +1,16 @@
 import { useRef, useState } from 'react';
-import type { DetectorSettings, RasterMetadata, TargetClass } from '../types';
+import type {
+  DetectorSettings,
+  ModelInfo,
+  RasterMetadata,
+  TargetClass,
+} from '../types';
 import { TARGET_META, TARGET_ORDER } from '../config';
 
 interface ControlPanelProps {
   settings: DetectorSettings;
   onSettingsChange: (patch: Partial<DetectorSettings>) => void;
+  models: ModelInfo[];
   raster: RasterMetadata | null;
   onFileSelected: (file: File) => void;
   onRunAnalysis: () => void;
@@ -28,6 +34,7 @@ function formatBytes(bytes: number): string {
 export default function ControlPanel({
   settings,
   onSettingsChange,
+  models,
   raster,
   onFileSelected,
   onRunAnalysis,
@@ -86,6 +93,23 @@ export default function ControlPanel({
           )}
         </div>
       </section>
+
+      {models.length > 0 && (
+        <section className="panel-section">
+          <label className="panel-label">Detection Model</label>
+          <select
+            className="model-select"
+            value={settings.modelId}
+            onChange={(e) => onSettingsChange({ modelId: e.target.value })}
+          >
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.satellite} · {m.algorithm} · {m.training_data}
+              </option>
+            ))}
+          </select>
+        </section>
+      )}
 
       <section className="panel-section">
         <label className="panel-label">Target Selection</label>
