@@ -132,7 +132,9 @@ def main() -> None:
     train_dl = DataLoader(train_ds, batch_size=args.batch, shuffle=True, num_workers=0)
     val_dl = DataLoader(val_ds, batch_size=args.batch, shuffle=False, num_workers=0)
 
-    device = torch.device(args.device)
+    # Accept bare digit device ids ("0") like the rest of this project's scripts.
+    dev_str = f"cuda:{args.device}" if args.device.isdigit() else args.device
+    device = torch.device(dev_str)
     model = SmallUNet(in_ch=image.shape[0]).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
