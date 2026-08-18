@@ -37,10 +37,17 @@ DEVICE = os.environ.get("GEOINT_DEVICE", "cpu")
 # new model (e.g. a Sentinel-2 land-cover net) is just another dict here.
 MODELS: list[dict] = [
     {
+        "id": "dota-obb-scratch",
+        "satellite": "High-res aerial",
+        "algorithm": "YOLO11s-OBB",
+        "training_data": "DOTAv1 (trained from scratch, 100 epochs)",
+        "weights": ROOT / "runs" / "dota_obb_scratch" / "weights" / "best.pt",
+    },
+    {
         "id": "dota-obb-finetuned",
         "satellite": "High-res aerial",
         "algorithm": "YOLO11s-OBB",
-        "training_data": "DOTAv1 (fine-tuned)",
+        "training_data": "DOTAv1 (fine-tuned, partial run)",
         "weights": ROOT / "runs" / "dota_obb" / "weights" / "best.pt",
     },
     {
@@ -49,13 +56,6 @@ MODELS: list[dict] = [
         "algorithm": "YOLO11s-OBB",
         "training_data": "DOTAv1 (stock pretrained)",
         "weights": ROOT / "yolo11s-obb.pt",
-    },
-    {
-        "id": "dota-obb-scratch",
-        "satellite": "High-res aerial",
-        "algorithm": "YOLO11s-OBB",
-        "training_data": "DOTAv1 (from scratch, demo)",
-        "weights": ROOT / "runs" / "dota_obb_scratch" / "weights" / "best.pt",
     },
 ]
 

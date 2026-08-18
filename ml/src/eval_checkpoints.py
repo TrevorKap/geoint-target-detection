@@ -25,7 +25,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-WEIGHTS_DIR = ROOT / "runs" / "dota_obb" / "weights"
+DEFAULT_WEIGHTS_DIR = ROOT / "runs" / "dota_obb" / "weights"
 VAL_IMAGES = ROOT / "data" / "processed" / "dota_split" / "images" / "val"
 VAL_LABELS = ROOT / "data" / "processed" / "dota_split" / "labels" / "val"
 DATA_YAML = ROOT / "ml" / "configs" / "dota_v1_split.yaml"
@@ -78,22 +78,25 @@ def label_panel(rgb: np.ndarray, title: str, subtitle: str) -> Image.Image:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoints", nargs="*", default=None,
-                    help="checkpoint filenames under runs/dota_obb/weights")
+                    help="checkpoint filenames under --weights-dir")
+    ap.add_argument("--weights-dir", default=str(DEFAULT_WEIGHTS_DIR),
+                    help="directory containing the checkpoint .pt files")
     ap.add_argument("--sample", default=None, help="scene image; default = busiest val tile")
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--revalidate", action="store_true", help="also compute val mAP (slow)")
     args = ap.parse_args()
+    weights_dir = Path(args.weights_dir)
 
     from ultralytics import YOLO  # lazy import
 
     names = args.checkpoints or DEFAULT_CKPTS
     ckpts = sorted(
-        [WEIGHTS_DIR / n for n in names if (WEIGHTS_DIR / n).exists()],
+        [weights_dir / n for n in names if (weights_dir / n).exists()],
         key=lambda p: _epoch_sort_key(p.name),
     )
     if not ckpts:
-        raise SystemExit(f"No checkpoints found in {WEIGHTS_DIR}")
+        raise SystemExit(f"No checkpoints found in {weights_dir}")
 
     sample = Path(args.sample) if args.sample else pick_busiest_val_tile()
     OUT.mkdir(parents=True, exist_ok=True)

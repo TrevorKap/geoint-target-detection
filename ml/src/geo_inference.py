@@ -210,8 +210,12 @@ def load_model(weights: str | Path, device: str = "cpu"):
     """Lazy import so the module is importable without ultralytics/torch loaded."""
     from ultralytics import YOLO
 
+    # model.to() is raw torch.nn.Module.to(), which -- unlike Ultralytics'
+    # predict()/train() -- doesn't accept bare digit device ids ("0" needs to
+    # be "cuda:0").
+    dev = f"cuda:{device}" if str(device).isdigit() else device
     model = YOLO(str(weights))
-    model.to(device)
+    model.to(dev)
     return model
 
 
