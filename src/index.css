@@ -62,6 +62,10 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Without this, a nested flex column doesn't reliably inherit its
+     stretched height from .app__body -- .summary's fixed 210px height wins
+     and .map-canvas (flex:1) collapses to 0 instead of filling the rest. */
+  min-height: 0;
 }
 
 /* ── Header ────────────────────────────────────────────────────────────── */
@@ -447,7 +451,11 @@ input[type='range']::-moz-range-thumb {
   flex: 1;
   min-height: 0;
 }
-.map-canvas__viewport {
+/* Two classes to out-specificity maplibre-gl.css's own .maplibregl-map rule,
+   which sets position:relative -- without absolute positioning here the
+   container sizes to normal document flow (0 content) instead of stretching
+   to fill .map-canvas, and the whole map silently renders at 0 height. */
+.map-canvas .map-canvas__viewport {
   position: absolute;
   inset: 0;
 }
@@ -601,8 +609,8 @@ input[type='range']::-moz-range-thumb {
   .map-canvas__scanning .scanline { animation: none; top: 50%; }
 }
 
-/* Detection popup (Mapbox) */
-.geoint-popup .mapboxgl-popup-content {
+/* Detection popup (MapLibre) */
+.geoint-popup .maplibregl-popup-content {
   background: var(--panel-2);
   border: 1px solid var(--border-bright);
   border-radius: 5px;
@@ -610,11 +618,11 @@ input[type='range']::-moz-range-thumb {
   color: var(--text);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 }
-.geoint-popup .mapboxgl-popup-tip {
+.geoint-popup .maplibregl-popup-tip {
   border-top-color: var(--border-bright);
   border-bottom-color: var(--border-bright);
 }
-.geoint-popup .mapboxgl-popup-close-button {
+.geoint-popup .maplibregl-popup-close-button {
   color: var(--text-dim);
   font-size: 16px;
   padding: 2px 6px;
@@ -835,8 +843,8 @@ input[type='range']::-moz-range-thumb {
   width: auto;
 }
 
-/* Mapbox control theming tweaks */
-.mapboxgl-ctrl-group {
+/* MapLibre control theming tweaks */
+.maplibregl-ctrl-group {
   background: var(--panel-2) !important;
   border: 1px solid var(--border-bright) !important;
 }

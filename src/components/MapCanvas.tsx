@@ -1,37 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { Detection, DetectorSettings, RasterMetadata } from '../types';
-import {
-  DEFAULT_CENTER,
-  DEFAULT_ZOOM,
-  HAS_MAPBOX_TOKEN,
-  MAPBOX_TOKEN,
-  TARGET_META,
-  TARGET_ORDER,
-} from '../config';
+import { DEFAULT_CENTER, DEFAULT_ZOOM, TARGET_META, TARGET_ORDER } from '../config';
 
-// Mapbox GL requires *some* token to initialise. When the operator has not
-// supplied one we set a sentinel and swap in a token-free Esri raster style.
-mapboxgl.accessToken = HAS_MAPBOX_TOKEN ? MAPBOX_TOKEN : 'no-token';
-
-// Esri World Imagery consistently rendered black in the user's browser across
-// multiple diagnostic rounds with no error/timeout ever firing. Swapped to
-// OpenStreetMap (different domain, different provider, no token) to isolate
-// whether that was Esri-specific (network/firewall blocking that domain) or a
-// deeper rendering issue that would affect any tile source identically.
-const OSM_FALLBACK_STYLE: mapboxgl.StyleSpecification = {
+// Renderer: MapLibre GL, the community fork of mapbox-gl v1 built for
+// token-free, self-hosted use -- avoids the CORS-blocked telemetry noise
+// mapbox-gl v2+ throws with no access token.
+//
+// The true root cause of the long black-map saga wasn't the renderer or the
+// tile provider at all: index.css's .map-canvas__viewport rule (position:
+// absolute; inset:0, meant to stretch the map to fill its parent) was losing
+// a same-specificity CSS cascade fight against maplibre-gl.css's own
+// .maplibregl-map { position: relative } base rule, so the container
+// resolved to 0 height and every tile source rendered into an invisible box.
+// Fixed via a higher-specificity selector in index.css. Esri World Imagery
+// (real satellite/aerial photography) was never actually broken.
+const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'osm-tiles': {
+    'esri-imagery': {
       type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
       tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
+      attribution: 'Esri, Maxar, Earthstar Geographics, and the GIS User Community',
     },
   },
-  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm-tiles' }],
+  layers: [{ id: 'esri-imagery', type: 'raster', source: 'esri-imagery' }],
 };
 
 const DETECTIONS_SOURCE = 'detections';
@@ -57,7 +55,7 @@ function visibleDetections(detections: Detection[], settings: DetectorSettings) 
   );
 }
 
-/** Convert visible detections into a GeoJSON FeatureCollection for Mapbox. */
+/** Convert visible detections into a GeoJSON FeatureCollection for the map. */
 function toFeatureCollection(visible: Detection[]): FeatureCollection {
   const features: Feature[] = visible.map((d) => ({
     type: 'Feature',
@@ -73,6 +71,19 @@ function toFeatureCollection(visible: Detection[]): FeatureCollection {
     geometry: { type: 'Polygon', coordinates: [d.polygon] },
   }));
   return { type: 'FeatureCollection', features };
+}
+
+/** Manual WebGL probe — MapLibre GL v6 dropped the built-in `supported()` check. */
+function isWebGLSupported(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Shared detail-popup markup for both map clicks and list focus. */
@@ -110,8 +121,8 @@ export default function MapCanvas({
   const detectionsRef = useRef(detections);
   detectionsRef.current = detections;
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const hoveredRef = useRef<string | number | null>(null);
   const [ready, setReady] = useState(false);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
@@ -138,7 +149,7 @@ export default function MapCanvas({
     // acceleration, an old/locked-down browser, a restrictive VM), the map
     // constructor either throws or produces a canvas that never paints --
     // with no indication why. Catch it up front instead.
-    if (!mapboxgl.supported()) {
+    if (!isWebGLSupported()) {
       setMapError(
         'Your browser does not support WebGL, which the map requires. Try a ' +
           'different browser, or enable hardware acceleration in browser settings.',
@@ -146,19 +157,16 @@ export default function MapCanvas({
       return;
     }
 
-    let map: mapboxgl.Map;
+    let map: maplibregl.Map;
     try {
-      map = new mapboxgl.Map({
+      map = new maplibregl.Map({
         container: containerRef.current,
-        style: HAS_MAPBOX_TOKEN
-          ? 'mapbox://styles/mapbox/satellite-streets-v12'
-          : OSM_FALLBACK_STYLE,
+        style: SATELLITE_STYLE,
         center: DEFAULT_CENTER,
         zoom: DEFAULT_ZOOM,
-        attributionControl: true,
         // Keep the WebGL buffer so the map can be screenshotted / exported as an
         // image (used for portfolio captures); negligible perf cost at this scale.
-        preserveDrawingBuffer: true,
+        canvasContextAttributes: { preserveDrawingBuffer: true },
       });
     } catch (e) {
       setMapError(`Map failed to initialize: ${e instanceof Error ? e.message : e}`);
@@ -166,21 +174,21 @@ export default function MapCanvas({
     }
     mapRef.current = map;
     if (import.meta.env.DEV) {
-      (window as unknown as { __geoMap?: mapboxgl.Map }).__geoMap = map;
+      (window as unknown as { __geoMap?: maplibregl.Map }).__geoMap = map;
     }
 
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
-    map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     map.on('mousemove', (e) => setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
     map.on('mouseout', () => setCursor(null));
 
-    // Mapbox GL swallows style/tile/WebGL failures into an 'error' event that
-    // nothing was listening for -- the exact cause of a permanently black map
+    // Style/tile/WebGL failures surface as an 'error' event that nothing was
+    // listening for previously -- the exact cause of a permanently black map
     // with zero feedback. Surface it.
     map.on('error', (e) => {
       const msg = e?.error?.message || 'Unknown map error';
-      console.error('[MapCanvas] mapbox error:', e.error);
+      console.error('[MapCanvas] map error:', e.error);
       setMapError(`Map error: ${msg}`);
     });
 
@@ -234,11 +242,9 @@ export default function MapCanvas({
       setReady(true);
     });
 
-    // The failure mode this catches: style/tiles report success (no 'error',
-    // no timeout) but the WebGL canvas never actually paints -- a GPU/driver
-    // or remote-desktop compositing problem, not a data-loading one. Sample
-    // real pixels once rendering has settled; if it's uniformly black, say so
-    // explicitly instead of leaving an unexplained blank map.
+    // Belt-and-suspenders: sample real pixels once rendering has settled so a
+    // WebGL canvas that "loads" but paints nothing (GPU/driver/compositing
+    // issue) doesn't look identical to a genuinely working map.
     let pixelCheckDone = false;
     map.once('idle', () => {
       if (pixelCheckDone) return;
@@ -310,7 +316,7 @@ export default function MapCanvas({
       };
       const html = detailPopupHTML(p);
       popupRef.current?.remove();
-      popupRef.current = new mapboxgl.Popup({
+      popupRef.current = new maplibregl.Popup({
         closeButton: true,
         className: 'geoint-popup',
         maxWidth: '260px',
@@ -332,7 +338,7 @@ export default function MapCanvas({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    const src = map.getSource(DETECTIONS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    const src = map.getSource(DETECTIONS_SOURCE) as maplibregl.GeoJSONSource | undefined;
     src?.setData(toFeatureCollection(visible));
   }, [visible, ready]);
 
@@ -416,7 +422,7 @@ export default function MapCanvas({
       dota: (det.attributes?.dota_class as string) ?? null,
     });
     popupRef.current?.remove();
-    popupRef.current = new mapboxgl.Popup({
+    popupRef.current = new maplibregl.Popup({
       closeButton: true,
       className: 'geoint-popup',
       maxWidth: '260px',
@@ -430,11 +436,9 @@ export default function MapCanvas({
     <div className="map-canvas">
       <div ref={containerRef} className="map-canvas__viewport" />
 
-      {!HAS_MAPBOX_TOKEN && (
-        <div className="map-canvas__badge" title="Using OpenStreetMap fallback">
-          NO MAPBOX TOKEN · OSM FALLBACK
-        </div>
-      )}
+      <div className="map-canvas__badge" title="Esri World Imagery via MapLibre GL — no API key required">
+        ESRI WORLD IMAGERY · NO API KEY
+      </div>
 
       {mapError && (
         <div className="map-canvas__fault" role="alert">

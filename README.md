@@ -11,22 +11,14 @@ pipelines.
 ## Stack
 
 - **React 19 + TypeScript + Vite 8** — component-based tactical dashboard SPA
-- **Mapbox GL JS** — interactive satellite map canvas
-  - Falls back automatically to **token-free Esri World Imagery** when no
-    `VITE_MAPBOX_TOKEN` is set, so the app runs with zero configuration.
+- **MapLibre GL JS** — interactive satellite map canvas (Esri World Imagery
+  basemap), no API key or account required
 
 ## Getting started
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-```
-
-Optional — for the Mapbox satellite-streets basemap instead of the Esri
-fallback, copy `.env.example` to `.env` and add a free public token:
-
-```bash
-VITE_MAPBOX_TOKEN=pk.your_token_here
 ```
 
 ## Architecture

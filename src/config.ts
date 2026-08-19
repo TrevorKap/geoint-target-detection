@@ -1,15 +1,5 @@
 import type { TargetClass } from './types';
 
-/**
- * Mapbox access token, supplied via `.env` as `VITE_MAPBOX_TOKEN`.
- * If absent, MapCanvas transparently falls back to a token-free Esri World
- * Imagery raster basemap so the app remains fully usable without an account.
- */
-export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
-
-/** Whether a real Mapbox token (public key `pk.…`) is configured. */
-export const HAS_MAPBOX_TOKEN = MAPBOX_TOKEN.startsWith('pk.');
-
 /** Default map view: San Diego / Coronado NAS — a dense military flightline. */
 export const DEFAULT_CENTER: [number, number] = [-117.19, 32.7];
 export const DEFAULT_ZOOM = 13;
