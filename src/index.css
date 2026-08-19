@@ -465,6 +465,39 @@ input[type='range']::-moz-range-thumb {
   color: var(--danger);
   border-radius: 3px;
 }
+.map-canvas__fault {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  max-width: 420px;
+  padding: 18px 22px;
+  background: rgba(7, 11, 16, 0.95);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--text);
+  text-align: center;
+}
+.map-canvas__fault strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: var(--danger);
+  margin-bottom: 10px;
+}
+.map-canvas__fault p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.map-canvas__fault-hint {
+  font-size: 11px !important;
+  color: var(--text-faint) !important;
+}
+
 .map-canvas__readout {
   position: absolute;
   bottom: 0;

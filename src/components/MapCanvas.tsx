@@ -112,6 +112,9 @@ export default function MapCanvas({
   const hoveredRef = useRef<string | number | null>(null);
   const [ready, setReady] = useState(false);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
+  // Surfaced instead of letting the map fail silently (a black canvas with no
+  // explanation) -- WebGL/style/tile failures previously vanished entirely.
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const visible = useMemo(
     () => visibleDetections(detections, settings),
@@ -128,18 +131,36 @@ export default function MapCanvas({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: HAS_MAPBOX_TOKEN
-        ? 'mapbox://styles/mapbox/satellite-streets-v12'
-        : ESRI_FALLBACK_STYLE,
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
-      attributionControl: true,
-      // Keep the WebGL buffer so the map can be screenshotted / exported as an
-      // image (used for portfolio captures); negligible perf cost at this scale.
-      preserveDrawingBuffer: true,
-    });
+    // Fails silently otherwise: if WebGL is unavailable (disabled hardware
+    // acceleration, an old/locked-down browser, a restrictive VM), the map
+    // constructor either throws or produces a canvas that never paints --
+    // with no indication why. Catch it up front instead.
+    if (!mapboxgl.supported()) {
+      setMapError(
+        'Your browser does not support WebGL, which the map requires. Try a ' +
+          'different browser, or enable hardware acceleration in browser settings.',
+      );
+      return;
+    }
+
+    let map: mapboxgl.Map;
+    try {
+      map = new mapboxgl.Map({
+        container: containerRef.current,
+        style: HAS_MAPBOX_TOKEN
+          ? 'mapbox://styles/mapbox/satellite-streets-v12'
+          : ESRI_FALLBACK_STYLE,
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+        attributionControl: true,
+        // Keep the WebGL buffer so the map can be screenshotted / exported as an
+        // image (used for portfolio captures); negligible perf cost at this scale.
+        preserveDrawingBuffer: true,
+      });
+    } catch (e) {
+      setMapError(`Map failed to initialize: ${e instanceof Error ? e.message : e}`);
+      return;
+    }
     mapRef.current = map;
     if (import.meta.env.DEV) {
       (window as unknown as { __geoMap?: mapboxgl.Map }).__geoMap = map;
@@ -151,7 +172,30 @@ export default function MapCanvas({
     map.on('mousemove', (e) => setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
     map.on('mouseout', () => setCursor(null));
 
+    // Mapbox GL swallows style/tile/WebGL failures into an 'error' event that
+    // nothing was listening for -- the exact cause of a permanently black map
+    // with zero feedback. Surface it.
+    map.on('error', (e) => {
+      const msg = e?.error?.message || 'Unknown map error';
+      console.error('[MapCanvas] mapbox error:', e.error);
+      setMapError(`Map error: ${msg}`);
+    });
+
+    // If the style/tiles never finish loading (network/firewall/ad-blocker
+    // blocking the tile host, etc.), 'load' never fires and the map just sits
+    // there blank forever with no signal. Time it out instead.
+    const loadTimeout = window.setTimeout(() => {
+      if (!mapRef.current) return;
+      setMapError((prev) =>
+        prev ??
+          'Map tiles are taking unusually long to load. This is usually a ' +
+            'network/firewall/ad-blocker issue blocking the basemap tile server.',
+      );
+    }, 12000);
+
     map.on('load', () => {
+      window.clearTimeout(loadTimeout);
+      setMapError(null);
       map.addSource(DETECTIONS_SOURCE, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -236,6 +280,7 @@ export default function MapCanvas({
     });
 
     return () => {
+      window.clearTimeout(loadTimeout);
       popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
@@ -347,6 +392,17 @@ export default function MapCanvas({
       {!HAS_MAPBOX_TOKEN && (
         <div className="map-canvas__badge" title="Using Esri World Imagery fallback">
           NO MAPBOX TOKEN · ESRI FALLBACK
+        </div>
+      )}
+
+      {mapError && (
+        <div className="map-canvas__fault" role="alert">
+          <strong>MAP FAILED TO LOAD</strong>
+          <p>{mapError}</p>
+          <p className="map-canvas__fault-hint">
+            Check the browser console (F12) for more detail, or try disabling
+            ad-blockers/privacy extensions for this page.
+          </p>
         </div>
       )}
 
