@@ -166,6 +166,29 @@ async def overlay(
         Path(tmp.name).unlink(missing_ok=True)
 
 
+@app.post("/api/snapshot")
+async def snapshot(
+    image: UploadFile = File(...),
+    west: float = Form(...),
+    south: float = Form(...),
+    east: float = Form(...),
+    north: float = Form(...),
+) -> Response:
+    """Turn a captured map-canvas PNG + its current view bounds into a real
+    GeoTIFF, so a region panned/zoomed to on the live basemap can be fed
+    straight into detection without a separate real-imagery file."""
+    try:
+        png_bytes = await image.read()
+        tif_bytes = gi.snapshot_to_geotiff(png_bytes, (west, south, east, north))
+        return Response(
+            content=tif_bytes,
+            media_type="image/tiff",
+            headers={"Content-Disposition": 'attachment; filename="map-snapshot.tif"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Snapshot capture failed: {exc}") from exc
+
+
 @app.post("/api/export/shapefile")
 def export_shapefile(featurecollection: dict = Body(...)) -> Response:
     """Convert a detections GeoJSON FeatureCollection into a zipped ESRI Shapefile.

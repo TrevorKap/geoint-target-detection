@@ -115,6 +115,44 @@ export async function regenerateOverlay(
 }
 
 /**
+ * Turn a captured map-canvas PNG + its current view bounds into a real
+ * GeoTIFF via the backend, wrapped as a File so it can be dropped straight
+ * into the normal upload/detect flow -- lets a region panned/zoomed to on
+ * the live basemap be analyzed without a separate real-imagery file.
+ */
+export async function captureSnapshot(
+  png: Blob,
+  bounds: [west: number, south: number, east: number, north: number],
+): Promise<File> {
+  const form = new FormData();
+  form.append('image', png, 'snapshot.png');
+  form.append('west', String(bounds[0]));
+  form.append('south', String(bounds[1]));
+  form.append('east', String(bounds[2]));
+  form.append('north', String(bounds[3]));
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_BASE}/api/snapshot`, { method: 'POST', body: form });
+  } catch {
+    throw new InferenceError(`Could not reach the backend at ${API_BASE}.`);
+  }
+  if (!resp.ok) {
+    let detail = `Snapshot capture failed (HTTP ${resp.status}).`;
+    try {
+      const body = (await resp.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      /* keep generic message */
+    }
+    throw new InferenceError(detail, resp.status);
+  }
+  const blob = await resp.blob();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return new File([blob], `map-snapshot-${stamp}.tif`, { type: 'image/tiff' });
+}
+
+/**
  * Export the (already-filtered) detections as a zipped ESRI Shapefile via the
  * backend, and trigger a browser download. Requires the backend to be running.
  */

@@ -44,6 +44,7 @@ interface MapCanvasProps {
   raster: RasterMetadata | null;
   analyzing: boolean;
   focusRequest: { id: string; seq: number } | null;
+  onSnapshot?: (png: Blob, bounds: [number, number, number, number]) => void;
 }
 
 /** Detections passing the current confidence + class filters. */
@@ -116,6 +117,7 @@ export default function MapCanvas({
   raster,
   analyzing,
   focusRequest,
+  onSnapshot,
 }: MapCanvasProps) {
   // Latest detections, read by the focus effect without re-subscribing to them.
   const detectionsRef = useRef(detections);
@@ -126,6 +128,7 @@ export default function MapCanvas({
   const hoveredRef = useRef<string | number | null>(null);
   const [ready, setReady] = useState(false);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
+  const [capturing, setCapturing] = useState(false);
   // Surfaced instead of letting the map fail silently (a black canvas with no
   // explanation) -- WebGL/style/tile failures previously vanished entirely.
   const [mapError, setMapError] = useState<string | null>(null);
@@ -432,6 +435,26 @@ export default function MapCanvas({
       .addTo(map);
   }, [focusRequest, ready]);
 
+  // Capture the current view (whatever the basemap is showing right now) as
+  // a real georeferenced GeoTIFF, so a panned/zoomed-to region can be run
+  // through detection without needing a separate real-imagery file.
+  const handleCapture = () => {
+    const map = mapRef.current;
+    if (!map || capturing) return;
+    setCapturing(true);
+    const b = map.getBounds();
+    const bounds: [number, number, number, number] = [
+      b.getWest(),
+      b.getSouth(),
+      b.getEast(),
+      b.getNorth(),
+    ];
+    map.getCanvas().toBlob((blob) => {
+      setCapturing(false);
+      if (blob) onSnapshot?.(blob, bounds);
+    }, 'image/png');
+  };
+
   return (
     <div className="map-canvas">
       <div ref={containerRef} className="map-canvas__viewport" />
@@ -439,6 +462,18 @@ export default function MapCanvas({
       <div className="map-canvas__badge" title="Esri World Imagery via MapLibre GL — no API key required">
         ESRI WORLD IMAGERY · NO API KEY
       </div>
+
+      {onSnapshot && (
+        <button
+          type="button"
+          className="map-canvas__capture"
+          onClick={handleCapture}
+          disabled={!ready || capturing || analyzing}
+          title="Capture the current map view as a GeoTIFF for detection"
+        >
+          {capturing ? 'CAPTURING…' : '📸 CAPTURE VIEW'}
+        </button>
+      )}
 
       {mapError && (
         <div className="map-canvas__fault" role="alert">

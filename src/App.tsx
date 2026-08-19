@@ -15,6 +15,7 @@ import {
   runInference,
   regenerateOverlay,
   fetchModels,
+  captureSnapshot,
   InferenceError,
 } from './services/inference';
 
@@ -96,6 +97,20 @@ export default function App() {
     setResult(null);
     setError(null);
     setNoOverlayNote(null);
+  };
+
+  // Capture the live basemap view as a real GeoTIFF and stage it exactly like
+  // a normal upload, so it can be run through detection immediately.
+  const handleSnapshot = async (png: Blob, bounds: [number, number, number, number]) => {
+    setError(null);
+    try {
+      const file = await captureSnapshot(png, bounds);
+      handleFileSelected(file);
+    } catch (err) {
+      const msg =
+        err instanceof InferenceError ? err.message : 'Could not capture the map view.';
+      setError(msg);
+    }
   };
 
   const handleRunAnalysis = async () => {
@@ -193,6 +208,7 @@ export default function App() {
             raster={raster}
             analyzing={analyzing}
             focusRequest={focusRequest}
+            onSnapshot={handleSnapshot}
           />
           <AnalyticalSummary
             result={result}

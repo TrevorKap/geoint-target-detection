@@ -51,6 +51,8 @@ _fix_proj_env()
 import numpy as np
 import rasterio
 from PIL import Image
+from rasterio.io import MemoryFile
+from rasterio.transform import from_origin
 from rasterio.warp import transform as warp_transform
 from rasterio.windows import Window
 from shapely.geometry import Polygon
@@ -118,6 +120,52 @@ def read_metadata(path: str | Path) -> dict:
             "acquired": None,  # populated from tags/EXIF in a later pass
             "bounds": bounds_wgs,
         }
+
+
+_MERC_R = 6378137.0  # Web Mercator sphere radius (metres)
+
+
+def _lonlat_to_web_mercator(lon: float, lat: float) -> tuple[float, float]:
+    """EPSG:4326 -> EPSG:3857. Web Mercator's y-axis is defined specifically so
+    that it's linear in pixel space at any zoom -- matching exactly how a
+    Mapbox/MapLibre-style map canvas renders -- so this is the correct CRS to
+    tag a raw canvas screenshot with (no per-pixel distortion to correct for,
+    unlike naively treating canvas pixels as linear in lon/lat)."""
+    lat = max(min(lat, 85.05112878), -85.05112878)  # Web Mercator's defined range
+    x = math.radians(lon) * _MERC_R
+    y = math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * _MERC_R
+    return x, y
+
+
+def snapshot_to_geotiff(png_bytes: bytes, bounds: tuple[float, float, float, float]) -> bytes:
+    """Turn a captured map-canvas PNG + its on-screen view bounds into a real,
+    georeferenced GeoTIFF -- so a region panned/zoomed to on the live basemap
+    can be run through the same detection pipeline as any uploaded file.
+
+    `bounds` = (west, south, east, north) in EPSG:4326 degrees, e.g. straight
+    from maplibregl.Map.getBounds(). Tagged as EPSG:3857 (Web Mercator) since
+    that's the projection the canvas was actually rendered in.
+    """
+    west, south, east, north = bounds
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    arr = np.array(img)
+    h, w = arr.shape[:2]
+
+    x0, y1 = _lonlat_to_web_mercator(west, north)  # top-left corner
+    x1, y0 = _lonlat_to_web_mercator(east, south)  # bottom-right corner
+    xres = (x1 - x0) / w
+    yres = (y1 - y0) / h
+    transform = from_origin(x0, y1, xres, yres)
+
+    profile = dict(
+        driver="GTiff", height=h, width=w, count=3, dtype="uint8",
+        crs="EPSG:3857", transform=transform, compress="deflate",
+    )
+    with MemoryFile() as memfile:
+        with memfile.open(**profile) as dst:
+            for b in range(3):
+                dst.write(arr[:, :, b], b + 1)
+        return memfile.read()
 
 
 def _iter_windows(width: int, height: int, tile: int, overlap: float):
