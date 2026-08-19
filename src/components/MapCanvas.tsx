@@ -442,17 +442,29 @@ export default function MapCanvas({
     const map = mapRef.current;
     if (!map || capturing) return;
     setCapturing(true);
-    const b = map.getBounds();
-    const bounds: [number, number, number, number] = [
-      b.getWest(),
-      b.getSouth(),
-      b.getEast(),
-      b.getNorth(),
-    ];
-    map.getCanvas().toBlob((blob) => {
-      setCapturing(false);
-      if (blob) onSnapshot?.(blob, bounds);
-    }, 'image/png');
+
+    const grab = () => {
+      const b = map.getBounds();
+      const bounds: [number, number, number, number] = [
+        b.getWest(),
+        b.getSouth(),
+        b.getEast(),
+        b.getNorth(),
+      ];
+      map.getCanvas().toBlob((blob) => {
+        setCapturing(false);
+        if (blob) onSnapshot?.(blob, bounds);
+      }, 'image/png');
+    };
+
+    // A just-panned/zoomed view can still have tiles mid-load; capturing
+    // immediately grabs whatever's rendered so far, including black
+    // not-yet-loaded tile placeholders. Wait for the map to fully settle.
+    if (map.areTilesLoaded()) {
+      grab();
+    } else {
+      map.once('idle', grab);
+    }
   };
 
   return (
