@@ -231,6 +231,44 @@ export default function MapCanvas({
       setReady(true);
     });
 
+    // The failure mode this catches: style/tiles report success (no 'error',
+    // no timeout) but the WebGL canvas never actually paints -- a GPU/driver
+    // or remote-desktop compositing problem, not a data-loading one. Sample
+    // real pixels once rendering has settled; if it's uniformly black, say so
+    // explicitly instead of leaving an unexplained blank map.
+    let pixelCheckDone = false;
+    map.once('idle', () => {
+      if (pixelCheckDone) return;
+      pixelCheckDone = true;
+      try {
+        const glCanvas = map.getCanvas();
+        const probe = document.createElement('canvas');
+        probe.width = glCanvas.width;
+        probe.height = glCanvas.height;
+        const ctx2d = probe.getContext('2d');
+        if (!ctx2d) return;
+        ctx2d.drawImage(glCanvas, 0, 0);
+        const { data } = ctx2d.getImageData(0, 0, probe.width, probe.height);
+        let nonBlack = 0;
+        for (let i = 0; i < data.length; i += 4 * 997) {
+          if (data[i] > 8 || data[i + 1] > 8 || data[i + 2] > 8) nonBlack++;
+        }
+        if (nonBlack === 0) {
+          setMapError(
+            'The map loaded with no errors, but the display is rendering ' +
+              'completely black -- this points to a GPU/graphics driver or ' +
+              'remote-desktop compositing issue in this browser environment, ' +
+              'not a data or network problem. Try a different browser, check ' +
+              'that hardware acceleration is enabled, or test outside any ' +
+              'remote-desktop/VM session.',
+          );
+        }
+      } catch {
+        // Canvas read can fail under some security contexts; not worth
+        // surfacing a second, less-specific error over the ones above.
+      }
+    });
+
     // Interactivity: pointer cursor + hover highlight over detections.
     const setHover = (id: string | number | null) => {
       if (hoveredRef.current !== null) {
