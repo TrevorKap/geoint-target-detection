@@ -16,19 +16,22 @@ import {
 // supplied one we set a sentinel and swap in a token-free Esri raster style.
 mapboxgl.accessToken = HAS_MAPBOX_TOKEN ? MAPBOX_TOKEN : 'no-token';
 
-const ESRI_FALLBACK_STYLE: mapboxgl.StyleSpecification = {
+// Esri World Imagery consistently rendered black in the user's browser across
+// multiple diagnostic rounds with no error/timeout ever firing. Swapped to
+// OpenStreetMap (different domain, different provider, no token) to isolate
+// whether that was Esri-specific (network/firewall blocking that domain) or a
+// deeper rendering issue that would affect any tile source identically.
+const OSM_FALLBACK_STYLE: mapboxgl.StyleSpecification = {
   version: 8,
   sources: {
-    'esri-imagery': {
+    'osm-tiles': {
       type: 'raster',
-      tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      ],
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
       tileSize: 256,
-      attribution: 'Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      attribution: '© OpenStreetMap contributors',
     },
   },
-  layers: [{ id: 'esri-imagery', type: 'raster', source: 'esri-imagery' }],
+  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm-tiles' }],
 };
 
 const DETECTIONS_SOURCE = 'detections';
@@ -149,7 +152,7 @@ export default function MapCanvas({
         container: containerRef.current,
         style: HAS_MAPBOX_TOKEN
           ? 'mapbox://styles/mapbox/satellite-streets-v12'
-          : ESRI_FALLBACK_STYLE,
+          : OSM_FALLBACK_STYLE,
         center: DEFAULT_CENTER,
         zoom: DEFAULT_ZOOM,
         attributionControl: true,
@@ -428,8 +431,8 @@ export default function MapCanvas({
       <div ref={containerRef} className="map-canvas__viewport" />
 
       {!HAS_MAPBOX_TOKEN && (
-        <div className="map-canvas__badge" title="Using Esri World Imagery fallback">
-          NO MAPBOX TOKEN · ESRI FALLBACK
+        <div className="map-canvas__badge" title="Using OpenStreetMap fallback">
+          NO MAPBOX TOKEN · OSM FALLBACK
         </div>
       )}
 
