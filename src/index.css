@@ -232,6 +232,12 @@ body {
   font-size: 11px;
   color: var(--text-dim);
 }
+.dropzone__reject {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--danger);
+}
 
 /* Model select */
 .model-select {
@@ -410,6 +416,26 @@ input[type='range']::-moz-range-thumb {
   color: var(--text-dim);
   cursor: pointer;
   font-size: 14px;
+}
+.app__notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(255, 176, 0, 0.1);
+  border-bottom: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+}
+.app__notice-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  background: var(--accent);
+  color: #1a1204;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
 .app__error-close:hover {
   color: var(--text);

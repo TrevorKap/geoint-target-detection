@@ -44,9 +44,23 @@ export default function ControlPanel({
 }: ControlPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [rejectReason, setRejectReason] = useState<string | null>(null);
 
   const handleFiles = (files: FileList | null) => {
-    if (files && files.length > 0) onFileSelected(files[0]);
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    // Drag-and-drop bypasses the <input accept> filter entirely, so validate
+    // here too -- otherwise a plain photo gets staged with no explanation for
+    // why nothing ever shows up on the map.
+    if (!/\.(tif|tiff|geotiff)$/i.test(file.name)) {
+      setRejectReason(
+        `"${file.name}" isn't a GeoTIFF (.tif/.tiff). A regular photo has no ` +
+          `location data, so it can't be placed on the map.`,
+      );
+      return;
+    }
+    setRejectReason(null);
+    onFileSelected(file);
   };
 
   const toggleClass = (cls: TargetClass) => {
@@ -92,6 +106,7 @@ export default function ControlPanel({
             <span className="dropzone__hint">Drop file here…</span>
           )}
         </div>
+        {rejectReason && <p className="dropzone__reject">{rejectReason}</p>}
       </section>
 
       {models.length > 0 && (

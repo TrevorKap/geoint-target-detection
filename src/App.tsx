@@ -44,6 +44,10 @@ export default function App() {
 
   // Note shown when False-Color IR is requested but the raster has no NIR band.
   const [vizNote, setVizNote] = useState<string | null>(null);
+  // Note shown when a successfully-analyzed raster has no embedded location
+  // data, so there's nothing to place on the map -- the #1 cause of "I
+  // uploaded a file and don't see anything."
+  const [noOverlayNote, setNoOverlayNote] = useState<string | null>(null);
 
   // Available detection models (from the backend), and the current selection.
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -91,6 +95,7 @@ export default function App() {
     setRaster(extractMetadata(file));
     setResult(null);
     setError(null);
+    setNoOverlayNote(null);
   };
 
   const handleRunAnalysis = async () => {
@@ -103,6 +108,14 @@ export default function App() {
       // Adopt the backend's authoritative metadata (CRS, GSD, bounds) so the
       // map can fit to the raster footprint.
       setRaster(res.raster);
+      setNoOverlayNote(
+        res.raster.overlay
+          ? null
+          : `${res.raster.filename} has no embedded location data (not a ` +
+              `georeferenced GeoTIFF), so it can't be shown on the map and ` +
+              `detections may not be positioned correctly. Try one of the ` +
+              `sample GeoTIFFs in data/samples/.`,
+      );
       setVizNote(
         settings.visualization === 'ir' && res.raster.overlay?.irApplied === false
           ? 'No near-infrared band in this raster — showing RGB.'
@@ -126,6 +139,7 @@ export default function App() {
     setError(null);
     setFocusRequest(null);
     setVizNote(null);
+    setNoOverlayNote(null);
     setSettings((prev) => ({ ...DEFAULT_SETTINGS, modelId: prev.modelId }));
   };
 
@@ -154,6 +168,20 @@ export default function App() {
                 className="app__error-close"
                 onClick={() => setError(null)}
                 aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {noOverlayNote && (
+            <div className="app__notice" role="status">
+              <span className="app__notice-tag">NO LOCATION DATA</span>
+              <span>{noOverlayNote}</span>
+              <button
+                type="button"
+                className="app__error-close"
+                onClick={() => setNoOverlayNote(null)}
+                aria-label="Dismiss notice"
               >
                 ✕
               </button>
