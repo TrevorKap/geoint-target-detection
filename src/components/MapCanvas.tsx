@@ -111,6 +111,31 @@ function detailPopupHTML(o: {
     </div>`;
 }
 
+/**
+ * Parse "lat, lon" / "lat lon" (optionally with a trailing ° symbol) into
+ * [lon, lat] for map.flyTo. Returns null if the string isn't a coordinate
+ * pair, so callers can fall back to place-name geocoding.
+ */
+function parseCoordinates(input: string): [number, number] | null {
+  const m = input.trim().match(/^(-?\d+(?:\.\d+)?)\s*°?\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*°?$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return [lon, lat];
+}
+
+/** Free, token-free place-name lookup via OpenStreetMap's Nominatim API. */
+async function geocodePlace(query: string): Promise<[number, number] | null> {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Geocoding failed (HTTP ${resp.status}).`);
+  const results = (await resp.json()) as { lat: string; lon: string }[];
+  if (results.length === 0) return null;
+  return [Number(results[0].lon), Number(results[0].lat)];
+}
+
 export default function MapCanvas({
   detections,
   settings,
@@ -129,6 +154,9 @@ export default function MapCanvas({
   const [ready, setReady] = useState(false);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   // Surfaced instead of letting the map fail silently (a black canvas with no
   // explanation) -- WebGL/style/tile failures previously vanished entirely.
   const [mapError, setMapError] = useState<string | null>(null);
@@ -435,6 +463,28 @@ export default function MapCanvas({
       .addTo(map);
   }, [focusRequest, ready]);
 
+  // Jump the map to a typed coordinate pair or place name. Coordinates are
+  // parsed locally; anything else goes through Nominatim (free, no API key).
+  const handleLocationSearch = async () => {
+    const map = mapRef.current;
+    const query = locationQuery.trim();
+    if (!map || !query || searching) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const coords = parseCoordinates(query) ?? (await geocodePlace(query));
+      if (!coords) {
+        setSearchError(`No results for "${query}".`);
+        return;
+      }
+      map.flyTo({ center: coords, zoom: 16, duration: 1500 });
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Search failed.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
   // Capture the current view (whatever the basemap is showing right now) as
   // a real georeferenced GeoTIFF, so a panned/zoomed-to region can be run
   // through detection without needing a separate real-imagery file.
@@ -486,6 +536,34 @@ export default function MapCanvas({
           {capturing ? 'CAPTURING…' : '📸 CAPTURE VIEW'}
         </button>
       )}
+
+      <form
+        className="map-canvas__search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleLocationSearch();
+        }}
+      >
+        <input
+          type="text"
+          className="map-canvas__search-input"
+          placeholder="Coordinates (34.9, -117.9) or place name…"
+          value={locationQuery}
+          onChange={(e) => {
+            setLocationQuery(e.target.value);
+            setSearchError(null);
+          }}
+          disabled={!ready}
+        />
+        <button
+          type="submit"
+          className="map-canvas__search-btn"
+          disabled={!ready || searching || !locationQuery.trim()}
+        >
+          {searching ? '…' : '🔍'}
+        </button>
+      </form>
+      {searchError && <div className="map-canvas__search-error">{searchError}</div>}
 
       {mapError && (
         <div className="map-canvas__fault" role="alert">
