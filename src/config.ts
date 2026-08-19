@@ -14,7 +14,6 @@ export const TARGET_META: Record<
   vehicle: { label: 'Ground Vehicle', color: '#4ade80', glyph: '🚚' },
   building: { label: 'Structure', color: '#f472b6', glyph: '▢' },
   storage_tank: { label: 'Storage Tank', color: '#a78bfa', glyph: '◍' },
-  helipad: { label: 'Helipad', color: '#fb7185', glyph: '✛' },
 };
 
 /** Stable ordering for target-selection UI and summary breakdowns. */
@@ -24,5 +23,4 @@ export const TARGET_ORDER: TargetClass[] = [
   'vehicle',
   'building',
   'storage_tank',
-  'helipad',
 ];

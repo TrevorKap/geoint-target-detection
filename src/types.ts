@@ -2,14 +2,18 @@
 // These mirror the contract the ML/DL backend will fulfil later, so the
 // front-end can be wired against real inference output with minimal changes.
 
-/** Fine-grained target classes the detector is expected to emit. */
+/**
+ * Fine-grained target classes the detector is expected to emit. Kept in sync
+ * with the DOTA-class -> TargetClass mapping in ml/src/geo_inference.py
+ * (CLASS_MAP / DEFAULT_TARGET) -- only classes something can actually map to
+ * belong here, so the UI never offers a filter that can never match anything.
+ */
 export type TargetClass =
   | 'aircraft'
   | 'vessel'
   | 'vehicle'
   | 'building'
-  | 'storage_tank'
-  | 'helipad';
+  | 'storage_tank';
 
 /** A single model detection, already projected into geographic space. */
 export interface Detection {
