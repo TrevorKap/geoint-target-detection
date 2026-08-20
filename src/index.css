@@ -195,6 +195,29 @@ body {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+.panel-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-label-action {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.panel-label-action:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.panel-label-action:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
 .panel-note {
   margin: 0;
   font-size: 11px;

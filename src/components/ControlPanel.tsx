@@ -127,7 +127,17 @@ export default function ControlPanel({
       )}
 
       <section className="panel-section">
-        <label className="panel-label">Target Selection</label>
+        <div className="panel-label-row">
+          <label className="panel-label">Target Selection</label>
+          <button
+            type="button"
+            className="panel-label-action"
+            onClick={() => onSettingsChange({ enabledClasses: new Set(TARGET_ORDER) })}
+            disabled={settings.enabledClasses.size === TARGET_ORDER.length}
+          >
+            Reset
+          </button>
+        </div>
         <div className="target-grid">
           {TARGET_ORDER.map((cls) => {
             const meta = TARGET_META[cls];
