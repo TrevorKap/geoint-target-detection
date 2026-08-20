@@ -19,13 +19,13 @@ const BAR_COLOR = '#c98500';
 // Sized for screenshots (LinkedIn-post crops), not just on-screen viewing --
 // larger canvas + bigger type than a typical dashboard chart would need.
 const CHART_W = 1200;
-const CHART_H = 680;
+const CHART_H = 620;
 const MARGIN = { top: 24, right: 28, bottom: 52, left: 64 };
 const PLOT_W = CHART_W - MARGIN.left - MARGIN.right;
 const PLOT_H = CHART_H - MARGIN.top - MARGIN.bottom;
 
 const BAR_MARGIN = { top: 20, right: 70, bottom: 50, left: 260 };
-const BAR_ROW_H = 46;
+const BAR_ROW_H = 42;
 const BAR_CHART_W = 1200;
 
 function formatPct(v: number): string {
