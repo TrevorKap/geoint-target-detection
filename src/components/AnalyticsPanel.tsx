@@ -16,15 +16,17 @@ const SERIES_COLORS: Record<string, string> = {
 const REFERENCE_COLOR = '#8a8f98';
 const BAR_COLOR = '#c98500';
 
-const CHART_W = 760;
-const CHART_H = 360;
-const MARGIN = { top: 16, right: 16, bottom: 36, left: 44 };
+// Sized for screenshots (LinkedIn-post crops), not just on-screen viewing --
+// larger canvas + bigger type than a typical dashboard chart would need.
+const CHART_W = 1040;
+const CHART_H = 500;
+const MARGIN = { top: 24, right: 28, bottom: 52, left: 64 };
 const PLOT_W = CHART_W - MARGIN.left - MARGIN.right;
 const PLOT_H = CHART_H - MARGIN.top - MARGIN.bottom;
 
-const BAR_MARGIN = { top: 8, right: 46, bottom: 28, left: 168 };
-const BAR_ROW_H = 24;
-const BAR_CHART_W = 760;
+const BAR_MARGIN = { top: 16, right: 64, bottom: 40, left: 250 };
+const BAR_ROW_H = 34;
+const BAR_CHART_W = 1040;
 
 function formatPct(v: number): string {
   return `${Math.round(v * 100)}%`;
@@ -148,7 +150,7 @@ export default function AnalyticsPanel() {
                   y2={yScale(v)}
                   className="analytics__gridline"
                 />
-                <text x={MARGIN.left - 8} y={yScale(v)} className="analytics__axis-label" textAnchor="end" dominantBaseline="middle">
+                <text x={MARGIN.left - 12} y={yScale(v)} className="analytics__axis-label" textAnchor="end" dominantBaseline="middle">
                   {formatPct(v)}
                 </text>
               </g>
@@ -159,7 +161,7 @@ export default function AnalyticsPanel() {
               <text
                 key={epoch}
                 x={xScale(Math.max(1, epoch))}
-                y={CHART_H - MARGIN.bottom + 18}
+                y={CHART_H - MARGIN.bottom + 24}
                 className="analytics__axis-label"
                 textAnchor="middle"
               >
@@ -168,7 +170,7 @@ export default function AnalyticsPanel() {
             ))}
             <text
               x={MARGIN.left + PLOT_W / 2}
-              y={CHART_H - 4}
+              y={CHART_H - 8}
               className="analytics__axis-title"
               textAnchor="middle"
             >
@@ -185,8 +187,8 @@ export default function AnalyticsPanel() {
                 y1={yScale(reference.map50)}
                 y2={yScale(reference.map50)}
                 stroke={REFERENCE_COLOR}
-                strokeWidth={1.5}
-                strokeDasharray="5 4"
+                strokeWidth={2}
+                strokeDasharray="7 5"
               />
             )}
 
@@ -213,7 +215,7 @@ export default function AnalyticsPanel() {
                   d={d}
                   fill="none"
                   stroke={color}
-                  strokeWidth={2}
+                  strokeWidth={3}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -231,10 +233,10 @@ export default function AnalyticsPanel() {
                     key={r.id}
                     cx={xScale(point.epoch)}
                     cy={yScale(point.map50)}
-                    r={4.5}
+                    r={6}
                     fill={color}
                     stroke="var(--panel-2)"
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                   />
                 );
               })}
@@ -341,7 +343,7 @@ export default function AnalyticsPanel() {
                 />
                 <text
                   x={barX(v)}
-                  y={barChartH - BAR_MARGIN.bottom + 16}
+                  y={barChartH - BAR_MARGIN.bottom + 24}
                   className="analytics__axis-label"
                   textAnchor="middle"
                 >
@@ -353,7 +355,7 @@ export default function AnalyticsPanel() {
             {sortedClasses.map((c, i) => {
               const meta = TARGET_META[c.target_class];
               const y = barY(i);
-              const barH = BAR_ROW_H - 8;
+              const barH = BAR_ROW_H - 10;
               return (
                 <g
                   key={c.name}
@@ -361,14 +363,14 @@ export default function AnalyticsPanel() {
                   style={{ cursor: 'pointer' }}
                 >
                   <rect
-                    x={BAR_MARGIN.left - 168}
+                    x={0}
                     y={y}
-                    width={168}
+                    width={BAR_MARGIN.left}
                     height={BAR_ROW_H}
                     fill="transparent"
                   />
                   <text
-                    x={BAR_MARGIN.left - 10}
+                    x={BAR_MARGIN.left - 14}
                     y={y + BAR_ROW_H / 2}
                     className="analytics__axis-label"
                     textAnchor="end"
@@ -378,17 +380,17 @@ export default function AnalyticsPanel() {
                   </text>
                   <rect
                     x={BAR_MARGIN.left}
-                    y={y + 4}
+                    y={y + 5}
                     width={Math.max(2, barX(c.ap50) - BAR_MARGIN.left)}
                     height={barH}
-                    rx={2}
+                    rx={3}
                     fill={BAR_COLOR}
                     opacity={hoverClass === null || hoverClass === c.name ? 1 : 0.45}
                   />
                   <text
-                    x={barX(c.ap50) + 6}
+                    x={barX(c.ap50) + 10}
                     y={y + BAR_ROW_H / 2}
-                    className="analytics__axis-label"
+                    className="analytics__axis-label analytics__axis-label--value"
                     dominantBaseline="middle"
                   >
                     {formatPct(c.ap50)}
