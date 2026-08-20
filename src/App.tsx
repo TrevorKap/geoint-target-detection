@@ -3,6 +3,7 @@ import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import MapCanvas from './components/MapCanvas';
 import AnalyticalSummary from './components/AnalyticalSummary';
+import AnalyticsPanel from './components/AnalyticsPanel';
 import type {
   AnalysisResult,
   DetectorSettings,
@@ -29,6 +30,7 @@ const DEFAULT_SETTINGS: DetectorSettings = {
 };
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'detection' | 'analytics'>('detection');
   const [settings, setSettings] = useState<DetectorSettings>(DEFAULT_SETTINGS);
   const [raster, setRaster] = useState<RasterMetadata | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -161,62 +163,82 @@ export default function App() {
   return (
     <div className="app">
       <Header status={status} />
-      <div className="app__body">
-        <ControlPanel
-          settings={settings}
-          onSettingsChange={handleSettingsChange}
-          models={models}
-          raster={raster}
-          onFileSelected={handleFileSelected}
-          onRunAnalysis={handleRunAnalysis}
-          onClear={handleClear}
-          analyzing={analyzing}
-          vizNote={vizNote}
-        />
-        <main className="app__main">
-          {error && (
-            <div className="app__error" role="alert">
-              <span className="app__error-tag">INFERENCE ERROR</span>
-              <span>{error}</span>
-              <button
-                type="button"
-                className="app__error-close"
-                onClick={() => setError(null)}
-                aria-label="Dismiss error"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-          {noOverlayNote && (
-            <div className="app__notice" role="status">
-              <span className="app__notice-tag">NO LOCATION DATA</span>
-              <span>{noOverlayNote}</span>
-              <button
-                type="button"
-                className="app__error-close"
-                onClick={() => setNoOverlayNote(null)}
-                aria-label="Dismiss notice"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-          <MapCanvas
-            detections={result?.detections ?? []}
+      <nav className="app-tabs">
+        <button
+          type="button"
+          className={`app-tabs__tab ${activeTab === 'detection' ? 'app-tabs__tab--on' : ''}`}
+          onClick={() => setActiveTab('detection')}
+        >
+          🎯 Detection
+        </button>
+        <button
+          type="button"
+          className={`app-tabs__tab ${activeTab === 'analytics' ? 'app-tabs__tab--on' : ''}`}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📈 Model Analytics
+        </button>
+      </nav>
+      {activeTab === 'analytics' ? (
+        <AnalyticsPanel />
+      ) : (
+        <div className="app__body">
+          <ControlPanel
             settings={settings}
+            onSettingsChange={handleSettingsChange}
+            models={models}
             raster={raster}
+            onFileSelected={handleFileSelected}
+            onRunAnalysis={handleRunAnalysis}
+            onClear={handleClear}
             analyzing={analyzing}
-            focusRequest={focusRequest}
-            onSnapshot={handleSnapshot}
+            vizNote={vizNote}
           />
-          <AnalyticalSummary
-            result={result}
-            settings={settings}
-            onFocus={handleFocusDetection}
-          />
-        </main>
-      </div>
+          <main className="app__main">
+            {error && (
+              <div className="app__error" role="alert">
+                <span className="app__error-tag">INFERENCE ERROR</span>
+                <span>{error}</span>
+                <button
+                  type="button"
+                  className="app__error-close"
+                  onClick={() => setError(null)}
+                  aria-label="Dismiss error"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            {noOverlayNote && (
+              <div className="app__notice" role="status">
+                <span className="app__notice-tag">NO LOCATION DATA</span>
+                <span>{noOverlayNote}</span>
+                <button
+                  type="button"
+                  className="app__error-close"
+                  onClick={() => setNoOverlayNote(null)}
+                  aria-label="Dismiss notice"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <MapCanvas
+              detections={result?.detections ?? []}
+              settings={settings}
+              raster={raster}
+              analyzing={analyzing}
+              focusRequest={focusRequest}
+              onSnapshot={handleSnapshot}
+            />
+            <AnalyticalSummary
+              result={result}
+              settings={settings}
+              onFocus={handleFocusDetection}
+            />
+          </main>
+        </div>
+      )}
     </div>
   );
 }

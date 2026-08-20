@@ -96,6 +96,22 @@ export interface ModelInfo {
   training_data: string;
 }
 
+/** One epoch's metrics from a training run (ultralytics results.csv). */
+export interface TrainingEpoch {
+  epoch: number;
+  map50: number;
+  map50_95: number;
+  precision: number;
+  recall: number;
+}
+
+/** A full training run's per-epoch history, for the Analytics tab. */
+export interface TrainingRun {
+  id: string;
+  label: string;
+  epochs: TrainingEpoch[];
+}
+
 /** Live cursor position readout for the map footer. */
 export interface CursorPosition {
   lat: number;

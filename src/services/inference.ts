@@ -3,6 +3,7 @@ import type {
   DetectorSettings,
   ModelInfo,
   RasterMetadata,
+  TrainingRun,
 } from '../types';
 import { toGeoJSON } from '../utils/geojson';
 
@@ -199,6 +200,18 @@ export async function fetchModels(): Promise<{ models: ModelInfo[]; default: str
     return (await resp.json()) as { models: ModelInfo[]; default: string | null };
   } catch {
     return { models: [], default: null };
+  }
+}
+
+/** Fetch per-epoch accuracy history for each trained model (Analytics tab). */
+export async function fetchTrainingMetrics(): Promise<TrainingRun[]> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/training-metrics`);
+    if (!resp.ok) return [];
+    const body = (await resp.json()) as { runs: TrainingRun[] };
+    return body.runs;
+  } catch {
+    return [];
   }
 }
 

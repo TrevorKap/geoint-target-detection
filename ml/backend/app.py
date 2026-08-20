@@ -14,6 +14,7 @@ done to serve from the GPU.
 
 from __future__ import annotations
 
+import csv
 import os
 import sys
 import tempfile
@@ -56,6 +57,23 @@ MODELS: list[dict] = [
         "algorithm": "YOLO11s-OBB",
         "training_data": "DOTAv1 (stock pretrained)",
         "weights": ROOT / "yolo11s-obb.pt",
+    },
+]
+
+# Training runs with a real per-epoch history to chart (Analytics tab). Only
+# the two real completed runs -- the stock-pretrained model never trained
+# here, and the broken batch=8 VRAM-thrashing attempt isn't a model anyone
+# selects, so surfacing either would be confusing, not informative.
+TRAINING_RUNS: list[dict] = [
+    {
+        "id": "dota-obb-scratch",
+        "label": "DOTAv1 (trained from scratch, 100 epochs)",
+        "csv": ROOT / "runs" / "dota_obb_scratch" / "results.csv",
+    },
+    {
+        "id": "dota-obb-finetuned",
+        "label": "DOTAv1 (fine-tuned, partial run)",
+        "csv": ROOT / "runs" / "dota_obb" / "results.csv",
     },
 ]
 
@@ -106,6 +124,35 @@ def health() -> dict:
         "models_available": [m["id"] for m in available_models()],
         "models_loaded": list(_cache.keys()),
     }
+
+
+def _read_training_csv(path: Path) -> list[dict]:
+    """Ultralytics results.csv -> [{epoch, map50, map50_95, precision, recall}]."""
+    rows: list[dict] = []
+    with open(path, newline="") as f:
+        for r in csv.DictReader(f):
+            rows.append({
+                "epoch": int(r["epoch"]),
+                "map50": float(r["metrics/mAP50(B)"]),
+                "map50_95": float(r["metrics/mAP50-95(B)"]),
+                "precision": float(r["metrics/precision(B)"]),
+                "recall": float(r["metrics/recall(B)"]),
+            })
+    return rows
+
+
+@app.get("/api/training-metrics")
+def training_metrics() -> dict:
+    """Per-epoch accuracy history for each trained model, for the Analytics tab."""
+    runs = []
+    for run in TRAINING_RUNS:
+        if run["csv"].exists():
+            runs.append({
+                "id": run["id"],
+                "label": run["label"],
+                "epochs": _read_training_csv(run["csv"]),
+            })
+    return {"runs": runs}
 
 
 @app.post("/api/infer")
