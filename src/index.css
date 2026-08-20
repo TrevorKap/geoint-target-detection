@@ -1040,6 +1040,15 @@ input[type='range']::-moz-range-thumb {
   border-radius: 2px;
   flex-shrink: 0;
 }
+.analytics__legend-swatch--dashed {
+  background: none;
+  border: 1.5px dashed;
+}
+.analytics__section-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+}
 .analytics__chart {
   width: 100%;
   max-width: 900px;

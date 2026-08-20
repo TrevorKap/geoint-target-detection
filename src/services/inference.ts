@@ -2,7 +2,9 @@ import type {
   AnalysisResult,
   DetectorSettings,
   ModelInfo,
+  PerClassMetric,
   RasterMetadata,
+  TrainingReference,
   TrainingRun,
 } from '../types';
 import { toGeoJSON } from '../utils/geojson';
@@ -203,13 +205,29 @@ export async function fetchModels(): Promise<{ models: ModelInfo[]; default: str
   }
 }
 
-/** Fetch per-epoch accuracy history for each trained model (Analytics tab). */
-export async function fetchTrainingMetrics(): Promise<TrainingRun[]> {
+/** Fetch per-epoch accuracy history for each trained model (Analytics tab),
+ * plus a single-point reference for the stock pretrained model (which has no
+ * local per-epoch history -- it was never trained in this project). */
+export async function fetchTrainingMetrics(): Promise<{
+  runs: TrainingRun[];
+  reference: TrainingReference | null;
+}> {
   try {
     const resp = await fetch(`${API_BASE}/api/training-metrics`);
+    if (!resp.ok) return { runs: [], reference: null };
+    return (await resp.json()) as { runs: TrainingRun[]; reference: TrainingReference | null };
+  } catch {
+    return { runs: [], reference: null };
+  }
+}
+
+/** Fetch per-DOTA-class AP50 for the default model (Analytics tab bar chart). */
+export async function fetchPerClassMetrics(): Promise<PerClassMetric[]> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/per-class-metrics`);
     if (!resp.ok) return [];
-    const body = (await resp.json()) as { runs: TrainingRun[] };
-    return body.runs;
+    const body = (await resp.json()) as { classes: PerClassMetric[] };
+    return body.classes;
   } catch {
     return [];
   }

@@ -60,10 +60,9 @@ MODELS: list[dict] = [
     },
 ]
 
-# Training runs with a real per-epoch history to chart (Analytics tab). Only
-# the two real completed runs -- the stock-pretrained model never trained
-# here, and the broken batch=8 VRAM-thrashing attempt isn't a model anyone
-# selects, so surfacing either would be confusing, not informative.
+# Training runs with a real per-epoch history to chart (Analytics tab). The
+# broken batch=8 VRAM-thrashing attempt isn't a model anyone selects, so
+# surfacing it would be confusing, not informative.
 TRAINING_RUNS: list[dict] = [
     {
         "id": "dota-obb-scratch",
@@ -76,6 +75,28 @@ TRAINING_RUNS: list[dict] = [
         "csv": ROOT / "runs" / "dota_obb" / "results.csv",
     },
 ]
+
+# The third registered model (dota-obb-pretrained) is Ultralytics' own
+# official yolo11s-obb.pt release -- never trained in this project, so there's
+# no local results.csv / per-epoch curve for it. Its mAP50 below is the
+# officially published benchmark (confirmed via Ultralytics' docs, mirrored on
+# the Ultralytics/YOLO11 Hugging Face model card): 79.5 mAP50 at imgsz 1024.
+# That number is measured on DOTA's held-out *test* split (labels withheld,
+# scored via DOTA's own submission server) -- a different protocol from the
+# *val*-split numbers the other two runs report here, and Ultralytics doesn't
+# publicly document the epoch count used to produce it, so it's shown as a
+# single reference point, not a fabricated per-epoch trajectory.
+PRETRAINED_REFERENCE = {
+    "id": "dota-obb-pretrained",
+    "label": "DOTAv1 (stock pretrained, official Ultralytics release)",
+    "map50": 0.795,
+    "note": (
+        "Officially published benchmark (mAP50 @ DOTA test split, imgsz 1024), "
+        "not a locally-trained run -- Ultralytics doesn't publish a per-epoch "
+        "curve or epoch count for this release, and the test split (vs. val) "
+        "makes it not a strictly apples-to-apples comparison."
+    ),
+}
 
 app = FastAPI(title="Tactical GEOINT Analyzer — Inference API", version="0.2.0")
 
@@ -152,7 +173,26 @@ def training_metrics() -> dict:
                 "label": run["label"],
                 "epochs": _read_training_csv(run["csv"]),
             })
-    return {"runs": runs}
+    return {"runs": runs, "reference": PRETRAINED_REFERENCE}
+
+
+@app.get("/api/per-class-metrics")
+def per_class_metrics() -> dict:
+    """Per-DOTA-class AP50 for the default (from-scratch) model, for the
+    Analytics tab's bar chart. Reads a cached JSON (see
+    ml/src/eval_per_class.py) rather than re-running validation on every
+    request -- a full val pass takes minutes."""
+    path = ROOT / "runs" / "dota_obb_scratch" / "per_class_ap50.json"
+    if not path.exists():
+        raise HTTPException(
+            status_code=503,
+            detail="Per-class metrics not yet computed. Run ml/src/eval_per_class.py.",
+        )
+    import json
+    data = json.loads(path.read_text())
+    for c in data["classes"]:
+        c["target_class"] = gi.CLASS_MAP.get(c["name"], gi.DEFAULT_TARGET)
+    return data
 
 
 @app.post("/api/infer")

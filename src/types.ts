@@ -112,6 +112,22 @@ export interface TrainingRun {
   epochs: TrainingEpoch[];
 }
 
+/** A single-point accuracy reference (e.g. an officially published pretrained
+ * benchmark with no local per-epoch history to chart). */
+export interface TrainingReference {
+  id: string;
+  label: string;
+  map50: number;
+  note: string;
+}
+
+/** One DOTA class's AP50, plus which app TargetClass it maps to. */
+export interface PerClassMetric {
+  name: string;
+  ap50: number;
+  target_class: TargetClass;
+}
+
 /** Live cursor position readout for the map footer. */
 export interface CursorPosition {
   lat: number;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { TrainingRun } from '../types';
-import { fetchTrainingMetrics } from '../services/inference';
+import type { PerClassMetric, TrainingReference, TrainingRun } from '../types';
+import { fetchPerClassMetrics, fetchTrainingMetrics } from '../services/inference';
+import { TARGET_META } from '../config';
 
 // Validated against this app's actual dark panel surface (#0e141b) with the
 // dataviz skill's palette checker: lightness band, chroma floor, CVD
@@ -12,6 +13,8 @@ const SERIES_COLORS: Record<string, string> = {
   'dota-obb-scratch': '#c98500',
   'dota-obb-finetuned': '#3987e5',
 };
+const REFERENCE_COLOR = '#8a8f98';
+const BAR_COLOR = '#c98500';
 
 const CHART_W = 760;
 const CHART_H = 360;
@@ -19,18 +22,29 @@ const MARGIN = { top: 16, right: 16, bottom: 36, left: 44 };
 const PLOT_W = CHART_W - MARGIN.left - MARGIN.right;
 const PLOT_H = CHART_H - MARGIN.top - MARGIN.bottom;
 
+const BAR_MARGIN = { top: 8, right: 46, bottom: 28, left: 168 };
+const BAR_ROW_H = 24;
+const BAR_CHART_W = 760;
+
 function formatPct(v: number): string {
   return `${Math.round(v * 100)}%`;
 }
 
 export default function AnalyticsPanel() {
   const [runs, setRuns] = useState<TrainingRun[] | null>(null);
+  const [reference, setReference] = useState<TrainingReference | null>(null);
+  const [perClass, setPerClass] = useState<PerClassMetric[] | null>(null);
   const [showTable, setShowTable] = useState(false);
   const [hoverEpoch, setHoverEpoch] = useState<number | null>(null);
+  const [hoverClass, setHoverClass] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    fetchTrainingMetrics().then(setRuns);
+    fetchTrainingMetrics().then(({ runs, reference }) => {
+      setRuns(runs);
+      setReference(reference);
+    });
+    fetchPerClassMetrics().then(setPerClass);
   }, []);
 
   const maxEpoch = useMemo(
@@ -56,6 +70,15 @@ export default function AnalyticsPanel() {
     { length: Math.floor(maxEpoch / gridXStep) + 1 },
     (_, i) => i * gridXStep,
   ).filter((v) => v >= 1);
+
+  const sortedClasses = useMemo(
+    () => (perClass ?? []).slice().sort((a, b) => b.ap50 - a.ap50),
+    [perClass],
+  );
+  const barPlotW = BAR_CHART_W - BAR_MARGIN.left - BAR_MARGIN.right;
+  const barChartH = BAR_MARGIN.top + BAR_MARGIN.bottom + sortedClasses.length * BAR_ROW_H;
+  const barX = (v: number) => BAR_MARGIN.left + v * barPlotW;
+  const barY = (i: number) => BAR_MARGIN.top + i * BAR_ROW_H;
 
   return (
     <div className="analytics">
@@ -97,6 +120,15 @@ export default function AnalyticsPanel() {
                 <span>{r.label}</span>
               </div>
             ))}
+            {reference && (
+              <div className="analytics__legend-item" title={reference.note}>
+                <span
+                  className="analytics__legend-swatch analytics__legend-swatch--dashed"
+                  style={{ borderColor: REFERENCE_COLOR }}
+                />
+                <span>{reference.label} (reference, ⓘ)</span>
+              </div>
+            )}
           </div>
 
           <svg
@@ -142,6 +174,21 @@ export default function AnalyticsPanel() {
             >
               EPOCH
             </text>
+
+            {/* Pretrained reference: a single published number, not a
+                per-epoch curve -- drawn as a dashed horizontal line so it
+                reads as "external benchmark," not fabricated training data. */}
+            {reference && (
+              <line
+                x1={MARGIN.left}
+                x2={CHART_W - MARGIN.right}
+                y1={yScale(reference.map50)}
+                y2={yScale(reference.map50)}
+                stroke={REFERENCE_COLOR}
+                strokeWidth={1.5}
+                strokeDasharray="5 4"
+              />
+            )}
 
             {/* Hover crosshair */}
             {hoverEpoch !== null && (
@@ -244,6 +291,112 @@ export default function AnalyticsPanel() {
               ))}
             </div>
           )}
+        </>
+      )}
+
+      <div className="analytics__section-divider" />
+
+      <div className="analytics__header">
+        <div>
+          <h2 className="analytics__title">🎯 Per-Class Accuracy</h2>
+          <p className="analytics__subtitle">
+            AP50 per DOTA class (default model, from-scratch run) — icons show which app
+            target-class filter each one falls under.
+          </p>
+        </div>
+      </div>
+
+      {perClass === null && <p className="analytics__empty">Loading per-class metrics…</p>}
+      {perClass !== null && perClass.length === 0 && (
+        <p className="analytics__empty">
+          Per-class metrics not available yet — run{' '}
+          <code>ml/src/eval_per_class.py</code> to compute them.
+        </p>
+      )}
+
+      {perClass !== null && perClass.length > 0 && (
+        <>
+          <div className="analytics__legend">
+            {Object.entries(TARGET_META).map(([cls, meta]) => (
+              <div key={cls} className="analytics__legend-item">
+                <span>{meta.glyph}</span>
+                <span>{meta.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <svg
+            className="analytics__chart"
+            viewBox={`0 0 ${BAR_CHART_W} ${barChartH}`}
+            onMouseLeave={() => setHoverClass(null)}
+          >
+            {[0, 0.25, 0.5, 0.75, 1.0].map((v) => (
+              <g key={v}>
+                <line
+                  x1={barX(v)}
+                  x2={barX(v)}
+                  y1={BAR_MARGIN.top}
+                  y2={barChartH - BAR_MARGIN.bottom}
+                  className="analytics__gridline"
+                />
+                <text
+                  x={barX(v)}
+                  y={barChartH - BAR_MARGIN.bottom + 16}
+                  className="analytics__axis-label"
+                  textAnchor="middle"
+                >
+                  {formatPct(v)}
+                </text>
+              </g>
+            ))}
+
+            {sortedClasses.map((c, i) => {
+              const meta = TARGET_META[c.target_class];
+              const y = barY(i);
+              const barH = BAR_ROW_H - 8;
+              return (
+                <g
+                  key={c.name}
+                  onMouseEnter={() => setHoverClass(c.name)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <rect
+                    x={BAR_MARGIN.left - 168}
+                    y={y}
+                    width={168}
+                    height={BAR_ROW_H}
+                    fill="transparent"
+                  />
+                  <text
+                    x={BAR_MARGIN.left - 10}
+                    y={y + BAR_ROW_H / 2}
+                    className="analytics__axis-label"
+                    textAnchor="end"
+                    dominantBaseline="middle"
+                  >
+                    {meta.glyph} {c.name}
+                  </text>
+                  <rect
+                    x={BAR_MARGIN.left}
+                    y={y + 4}
+                    width={Math.max(2, barX(c.ap50) - BAR_MARGIN.left)}
+                    height={barH}
+                    rx={2}
+                    fill={BAR_COLOR}
+                    opacity={hoverClass === null || hoverClass === c.name ? 1 : 0.45}
+                  />
+                  <text
+                    x={barX(c.ap50) + 6}
+                    y={y + BAR_ROW_H / 2}
+                    className="analytics__axis-label"
+                    dominantBaseline="middle"
+                  >
+                    {formatPct(c.ap50)}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
         </>
       )}
     </div>
